@@ -1,1 +1,7 @@
-// 程序入口（调用 bootstrap/main）
+import { start } from './bootstrap/main.js';
+
+async function main() {
+	await start();
+}
+
+main();

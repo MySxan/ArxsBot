@@ -1,1 +1,6 @@
-# 默认配置
+app:
+  name: ArxsBot
+  env: development
+logger:
+  level: info
+  transport: console

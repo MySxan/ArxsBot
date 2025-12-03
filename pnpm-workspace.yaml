@@ -1,1 +1,2 @@
-# 如果用 monorepo，可选
+onlyBuiltDependencies:
+  - esbuild
