@@ -34,6 +34,6 @@ export function loadConfig(): AppConfig {
 	return cachedConfig;
 }
 
-console.log(loadConfig());
+// console.log(loadConfig());
 
 export const config: AppConfig = loadConfig();
