@@ -1,0 +1,1 @@
+// BasePlugin / BaseCommand / BaseTool 等
