@@ -1,8 +1,9 @@
 import type { Event } from '../model/Event.js';
 import type { Action } from '../model/Action.js';
 import type { Context } from '../model/Context.js';
+import type { Intent } from '../model/Intent.js';
 
-export type Handler = (event: Event, context: Context) => Promise<Action[]>;
+export type Handler = (event: Event, context: Context, intent?: Intent | null) => Promise<Action[]>;
 
 export class HandlerRegistry {
 	private handlers: Map<string, Handler> = new Map();

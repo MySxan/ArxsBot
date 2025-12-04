@@ -1,1 +1,7 @@
-// 基础流程端到端测试
+import { describe, it } from 'vitest';
+
+describe.skip('E2E: Basic Flows', () => {
+	it('placeholder - more tests to be added', () => {
+		// Placeholder test
+	});
+});
