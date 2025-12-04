@@ -1,7 +1,7 @@
 import { start } from './bootstrap/main.js';
 
 async function main() {
-	await start();
+  await start();
 }
 
 main();
