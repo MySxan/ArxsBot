@@ -35,3 +35,6 @@ webui-frontend/.vite/
 
 # Test artifacts
 tests/tmp/
+structure-proj.md
+structure-memory.md
+structure-context.md

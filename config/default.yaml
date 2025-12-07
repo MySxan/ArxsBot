@@ -2,8 +2,11 @@ app:
   name: ArxsBot
   env: dev
 logger:
-  level: info
+  level: debug
   transport: console
+logging:
+  color: true
+  level: info
 adapters:
   qq:
     enabled: true

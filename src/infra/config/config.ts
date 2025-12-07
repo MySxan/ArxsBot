@@ -11,6 +11,10 @@ export type AppConfig = {
     level: 'debug' | 'info' | 'warn' | 'error';
     transport: 'console';
   };
+  logging?: {
+    color?: boolean;
+    level?: 'debug' | 'info' | 'warn' | 'error';
+  };
   adapters?: {
     qq?: {
       enabled?: boolean;
@@ -27,7 +31,7 @@ export function loadConfig(): AppConfig {
   const filePath = resolve(process.cwd(), 'config', 'default.yaml');
   const raw = readFileSync(filePath, 'utf-8');
   const cfg = parse(raw) as Partial<AppConfig>;
-  const env = (process.env.NODE_ENV as AppConfig['app']['env']) || cfg?.app?.env || 'dev';
+  const env = (process.env.NODE_ENV as AppConfig['app']['env']) || cfg?.app?.env || 'prod';
   cachedConfig = {
     app: {
       name: cfg?.app?.name ?? 'ArxsBot',
@@ -36,6 +40,10 @@ export function loadConfig(): AppConfig {
     logger: {
       level: (cfg?.logger?.level as AppConfig['logger']['level']) ?? 'info',
       transport: 'console',
+    },
+    logging: {
+      color: cfg?.logging?.color ?? true,
+      level: (cfg?.logging?.level as AppConfig['logger']['level']) ?? cfg?.logger?.level ?? 'info',
     },
     adapters: {
       qq: {
@@ -48,12 +56,13 @@ export function loadConfig(): AppConfig {
     },
   };
 
-  // Enforce token in prod when QQ adapter enabled
+  // Auto-disable QQ adapter if token is missing in prod (warn instead of fail)
   if (cachedConfig.adapters?.qq?.enabled && cachedConfig.app.env === 'prod') {
     if (!cachedConfig.adapters.qq.token) {
-      throw new Error(
-        'QQ adapter enabled in prod but no token configured. Set adapters.qq.token or QQ_ADAPTER_TOKEN.',
+      console.warn(
+        '[CONFIG] QQ adapter enabled in prod but no token configured. Disabling adapter. Set adapters.qq.token or QQ_ADAPTER_TOKEN to enable.',
       );
+      cachedConfig.adapters.qq.enabled = false;
     }
   }
   return cachedConfig;

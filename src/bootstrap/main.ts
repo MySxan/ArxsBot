@@ -35,6 +35,7 @@ export async function start() {
 
   // Start QQ/NapCat adapter if enabled
   if (cfg.adapters?.qq?.enabled) {
+    logger.info('bootstrap', 'Starting QQ/NapCat adapter...');
     const napcatClient = new NapcatClient(
       dispatcher,
       logger,
@@ -42,10 +43,12 @@ export async function start() {
       cfg.adapters.qq.token,
     );
     napcatClient.start();
+  } else if (cfg.adapters?.qq) {
+    logger.warn('bootstrap', 'QQ/NapCat adapter disabled (missing token or config)');
   }
 
   // Start mock CLI adapter for development
-  startMockAdapter(dispatcher);
+  // startMockAdapter(dispatcher);
 }
 
 export function getDispatcher(): Dispatcher | null {
