@@ -136,12 +136,12 @@ export class Dispatcher {
       }
       index = i;
 
-      let fn: () => Promise<Action[]>;
-      if (i === middleware.length) {
-        fn = final;
-      } else {
-        fn = () => dispatch(i + 1);
+      // When we've exhausted middleware, call the final handler
+      if (i >= middleware.length) {
+        return final();
       }
+
+      const fn = () => dispatch(i + 1);
 
       try {
         return await middleware[i](event, context, fn);

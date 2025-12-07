@@ -98,7 +98,7 @@ export class MockClient {
     });
 
     this.rl.on('close', () => {
-      console.log('\nMock client closed .');
+      console.log('\nMock client closed.');
       process.exit(0);
     });
   }

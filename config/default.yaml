@@ -6,5 +6,5 @@ logger:
   transport: console
 adapters:
   qq:
-    enabled: true
+    enabled: false
     wsPort: 6090

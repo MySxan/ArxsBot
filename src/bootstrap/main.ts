@@ -5,6 +5,7 @@ import { IntentRecognizer } from '../core/intent/intentRecognizer.js';
 import { ChatAiHandler } from '../apps/chatAi/chatAiHandler.js';
 import { startMockAdapter } from '../adapter/index.js';
 import { NapcatClient } from '../adapter/qq/napcatClient.js';
+import { loggingMiddleware } from '../core/dispatcher/middleware/loggingMiddleware.js';
 
 let dispatcher: Dispatcher | null = null;
 
@@ -17,6 +18,9 @@ export async function start() {
   // Initialize intent recognizer and dispatcher
   const intentRecognizer = new IntentRecognizer();
   dispatcher = new Dispatcher(logger, intentRecognizer);
+
+  // Register logging middleware for visibility
+  dispatcher.useBefore((event, context, next) => loggingMiddleware(event, context, next, logger));
 
   // Register handlers using metadata auto-registration
   dispatcher.registerHandlerClass(ChatAiHandler);
