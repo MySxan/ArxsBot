@@ -3,7 +3,7 @@ import { createLogger } from '../infra/logger/logger.js';
 import { Dispatcher } from '../core/dispatcher/dispatcher.js';
 import { IntentRecognizer } from '../core/intent/intentRecognizer.js';
 import { ChatAiHandler } from '../apps/chatAi/chatAiHandler.js';
-import { IntentType } from '../core/model/Intent.js';
+import { startMockAdapter } from '../adapter/index.js';
 
 let dispatcher: Dispatcher | null = null;
 
@@ -21,6 +21,9 @@ export async function start() {
   dispatcher.registerHandlerClass(ChatAiHandler);
 
   logger.info('bootstrap', 'Handlers registered');
+
+  // Start mock CLI adapter for development
+  startMockAdapter(dispatcher);
 }
 
 export function getDispatcher(): Dispatcher | null {
