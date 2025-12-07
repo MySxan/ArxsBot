@@ -6,6 +6,7 @@ import { ChatAiHandler } from '../apps/chatAi/chatAiHandler.js';
 import { startMockAdapter } from '../adapter/index.js';
 import { NapcatClient } from '../adapter/qq/napcatClient.js';
 import { loggingMiddleware } from '../core/dispatcher/middleware/loggingMiddleware.js';
+import { createActionSecurityMiddleware } from '../security/middleware/actionSecurity.js';
 
 let dispatcher: Dispatcher | null = null;
 
@@ -22,6 +23,11 @@ export async function start() {
   // Register logging middleware for visibility
   dispatcher.useBefore((event, context, next) => loggingMiddleware(event, context, next, logger));
 
+  // Register action security middleware (sanitize/truncate outputs)
+  dispatcher.useAfter((event, context, next) =>
+    createActionSecurityMiddleware(logger)(event, context, next),
+  );
+
   // Register handlers using metadata auto-registration
   dispatcher.registerHandlerClass(ChatAiHandler);
 
@@ -29,7 +35,12 @@ export async function start() {
 
   // Start QQ/NapCat adapter if enabled
   if (cfg.adapters?.qq?.enabled) {
-    const napcatClient = new NapcatClient(dispatcher, logger, cfg.adapters.qq.wsPort);
+    const napcatClient = new NapcatClient(
+      dispatcher,
+      logger,
+      cfg.adapters.qq.wsPort,
+      cfg.adapters.qq.token,
+    );
     napcatClient.start();
   }
 

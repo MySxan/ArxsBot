@@ -15,6 +15,7 @@ export type AppConfig = {
     qq?: {
       enabled?: boolean;
       wsPort?: number;
+      token?: string;
     };
   };
 };
@@ -40,9 +41,19 @@ export function loadConfig(): AppConfig {
       qq: {
         enabled: cfg?.adapters?.qq?.enabled ?? true,
         wsPort: cfg?.adapters?.qq?.wsPort ?? 6090,
+        token: cfg?.adapters?.qq?.token ?? process.env.QQ_ADAPTER_TOKEN,
       },
     },
   };
+
+  // Enforce token in production when QQ adapter enabled
+  if (cachedConfig.adapters?.qq?.enabled && cachedConfig.app.env === 'production') {
+    if (!cachedConfig.adapters.qq.token) {
+      throw new Error(
+        'QQ adapter enabled in production but no token configured. Set adapters.qq.token or QQ_ADAPTER_TOKEN.',
+      );
+    }
+  }
   return cachedConfig;
 }
 

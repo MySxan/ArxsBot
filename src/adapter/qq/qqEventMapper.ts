@@ -1,4 +1,5 @@
-import type { Event, EventType } from '../../core/model/Event.js';
+import { z } from 'zod';
+import type { Event } from '../../core/model/Event.js';
 import type { Message } from '../../core/model/Message.js';
 import type { User } from '../../core/model/User.js';
 import type { Group } from '../../core/model/Group.js';
@@ -11,104 +12,111 @@ import { EventType as ArxsEventType } from '../../core/model/Event.js';
  * We focus on text messages in group/private chats.
  */
 export interface OneBot11Message {
-	time: number;
-	self_id: number;
-	post_type: 'message' | 'notice' | 'request' | 'meta_event';
-	message_type: 'private' | 'group';
-	sub_type?: string;
-	message_id?: number;
-	group_id?: number;
-	user_id: number;
-	anonymous?: unknown;
-	message: Array<{
-		type: string;
-		data: Record<string, unknown>;
-	}>;
-	raw_message?: string;
-	font?: number;
-	sender?: {
-		user_id: number;
-		nickname?: string;
-		card?: string;
-		sex?: string;
-		age?: number;
-		area?: string;
-		level?: number;
-		role?: string;
-		title?: string;
-	};
+  time: number;
+  self_id: number;
+  post_type: 'message' | 'notice' | 'request' | 'meta_event';
+  message_type: 'private' | 'group';
+  sub_type?: string;
+  message_id?: number;
+  group_id?: number;
+  user_id: number;
+  anonymous?: unknown;
+  message: Array<{
+    type: string;
+    data: Record<string, unknown>;
+  }>;
+  raw_message?: string;
+  font?: number;
+  sender?: {
+    user_id: number;
+    nickname?: string;
+    card?: string;
+    sex?: string;
+    age?: number;
+    area?: string;
+    level?: number;
+    role?: string;
+    title?: string;
+  };
 }
+
+// OneBot11 message schema
+const OB11MessageSchema = z.object({
+  post_type: z.literal('message'),
+  message_type: z.enum(['group', 'private']),
+  message: z.array(
+    z.object({
+      type: z.literal('text'),
+      data: z.object({ text: z.string().max(2000) }),
+    }),
+  ),
+  user_id: z.number(),
+  group_id: z.number().optional(),
+  message_id: z.number().optional(),
+  time: z.number(),
+  self_id: z.number(),
+  sender: z
+    .object({
+      user_id: z.number(),
+      nickname: z.string().optional(),
+      card: z.string().optional(),
+    })
+    .optional(),
+});
 
 /**
  * Map OneBot11 message to ArxsBot MessageReceivedEvent.
  */
-export function mapOneBot11ToEvent(raw: OneBot11Message): Event | null {
-	if (raw.post_type !== 'message') {
-		return null; // Only handle message events
-	}
+export function mapOneBot11ToEvent(raw: unknown): Event | null {
+  const parsed = OB11MessageSchema.safeParse(raw);
+  if (!parsed.success) {
+    return null; // Reject invalid schema
+  }
 
-	if (!raw.message || raw.message.length === 0) {
-		return null;
-	}
+  const msg = parsed.data;
 
-	// Extract text from message segments
-	const content = raw.message.map((seg) => {
-		if (seg.type === 'text') {
-			return {
-				type: MessageContentType.Text,
-				data: { text: seg.data.text ?? '' },
-			};
-		}
-		// Skip other types for now
-		return null;
-	});
+  const textSegments = msg.message.map((seg) => ({
+    type: MessageContentType.Text,
+    data: { text: seg.data.text ?? '' },
+  }));
 
-	const textSegments = content.filter((seg) => seg !== null) as Array<{
-		type: MessageContentType;
-		data: unknown;
-	}>;
+  // Create user
+  const user: User = {
+    id: String(msg.user_id),
+    platform: 'qq',
+    displayName: msg.sender?.nickname ?? msg.sender?.card ?? `User${msg.user_id}`,
+    username: msg.sender?.nickname,
+  };
 
-	if (textSegments.length === 0) {
-		return null; // No text segments
-	}
+  // Create message
+  const message: Message = {
+    id: String(msg.message_id ?? 0),
+    channelId: msg.message_type === 'group' ? String(msg.group_id ?? 0) : String(msg.user_id),
+    userId: String(msg.user_id),
+    platform: 'qq',
+    timestamp: msg.time * 1000, // Convert from seconds to milliseconds
+    content: textSegments,
+    author: user,
+  };
 
-	// Create user
-	const user: User = {
-		id: String(raw.user_id),
-		platform: 'qq',
-		displayName: raw.sender?.nickname ?? raw.sender?.card ?? `User${raw.user_id}`,
-		username: raw.sender?.nickname,
-	};
+  // Create group if group message
+  let group: Group | undefined;
+  if (msg.message_type === 'group' && msg.group_id) {
+    group = {
+      id: String(msg.group_id),
+      platform: 'qq',
+      displayName: `Group${msg.group_id}`,
+    };
+  }
 
-	// Create message
-	const message: Message = {
-		id: String(raw.message_id ?? 0),
-		channelId: raw.message_type === 'group' ? String(raw.group_id ?? 0) : String(raw.user_id),
-		userId: String(raw.user_id),
-		platform: 'qq',
-		timestamp: raw.time * 1000, // Convert from seconds to milliseconds
-		content: textSegments,
-		author: user,
-	};
+  // Create event
+  const event: Event = {
+    type: ArxsEventType.MessageReceived,
+    platform: 'qq',
+    timestamp: Date.now(),
+    message,
+    ...(group && { group }),
+  };
 
-	// Create group if group message
-	let group: Group | undefined;
-	if (raw.message_type === 'group' && raw.group_id) {
-		group = {
-			id: String(raw.group_id),
-			platform: 'qq',
-			displayName: `Group${raw.group_id}`,
-		};
-	}
-
-	// Create event
-	const event: Event = {
-		type: ArxsEventType.MessageReceived,
-		platform: 'qq',
-		timestamp: Date.now(),
-		message,
-		...(group && { group }),
-	};
-
-	return event;
+  return event;
 }
