@@ -5,7 +5,7 @@ import { parse } from 'yaml';
 export type AppConfig = {
   app: {
     name: string;
-    env: 'development' | 'production' | 'test';
+    env: 'dev' | 'prod' | 'test';
   };
   logger: {
     level: 'debug' | 'info' | 'warn' | 'error';
@@ -27,7 +27,7 @@ export function loadConfig(): AppConfig {
   const filePath = resolve(process.cwd(), 'config', 'default.yaml');
   const raw = readFileSync(filePath, 'utf-8');
   const cfg = parse(raw) as Partial<AppConfig>;
-  const env = (process.env.NODE_ENV as AppConfig['app']['env']) || cfg?.app?.env || 'development';
+  const env = (process.env.NODE_ENV as AppConfig['app']['env']) || cfg?.app?.env || 'dev';
   cachedConfig = {
     app: {
       name: cfg?.app?.name ?? 'ArxsBot',
@@ -41,16 +41,18 @@ export function loadConfig(): AppConfig {
       qq: {
         enabled: cfg?.adapters?.qq?.enabled ?? true,
         wsPort: cfg?.adapters?.qq?.wsPort ?? 6090,
-        token: cfg?.adapters?.qq?.token ?? process.env.QQ_ADAPTER_TOKEN,
+        token: cfg?.adapters?.qq?.token
+          ? String(cfg.adapters.qq.token)
+          : process.env.QQ_ADAPTER_TOKEN,
       },
     },
   };
 
-  // Enforce token in production when QQ adapter enabled
-  if (cachedConfig.adapters?.qq?.enabled && cachedConfig.app.env === 'production') {
+  // Enforce token in prod when QQ adapter enabled
+  if (cachedConfig.adapters?.qq?.enabled && cachedConfig.app.env === 'prod') {
     if (!cachedConfig.adapters.qq.token) {
       throw new Error(
-        'QQ adapter enabled in production but no token configured. Set adapters.qq.token or QQ_ADAPTER_TOKEN.',
+        'QQ adapter enabled in prod but no token configured. Set adapters.qq.token or QQ_ADAPTER_TOKEN.',
       );
     }
   }

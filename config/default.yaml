@@ -1,6 +1,6 @@
 app:
   name: ArxsBot
-  env: development
+  env: dev
 logger:
   level: info
   transport: console
