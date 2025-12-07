@@ -4,6 +4,7 @@ import { Dispatcher } from '../core/dispatcher/dispatcher.js';
 import { IntentRecognizer } from '../core/intent/intentRecognizer.js';
 import { ChatAiHandler } from '../apps/chatAi/chatAiHandler.js';
 import { startMockAdapter } from '../adapter/index.js';
+import { NapcatClient } from '../adapter/qq/napcatClient.js';
 
 let dispatcher: Dispatcher | null = null;
 
@@ -21,6 +22,12 @@ export async function start() {
   dispatcher.registerHandlerClass(ChatAiHandler);
 
   logger.info('bootstrap', 'Handlers registered');
+
+  // Start QQ/NapCat adapter if enabled
+  if (cfg.adapters?.qq?.enabled) {
+    const napcatClient = new NapcatClient(dispatcher, logger, cfg.adapters.qq.wsPort);
+    napcatClient.start();
+  }
 
   // Start mock CLI adapter for development
   startMockAdapter(dispatcher);

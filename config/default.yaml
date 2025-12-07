@@ -4,3 +4,7 @@ app:
 logger:
   level: info
   transport: console
+adapters:
+  qq:
+    enabled: true
+    wsPort: 6090

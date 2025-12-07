@@ -26,6 +26,7 @@ export interface BaseEvent {
 export interface MessageReceivedEvent extends BaseEvent {
   type: EventType.MessageReceived;
   message: Message;
+  group?: Group; // optional for group/private message context
 }
 
 export interface MemberJoinedEvent extends BaseEvent {

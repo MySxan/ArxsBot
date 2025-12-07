@@ -11,6 +11,12 @@ export type AppConfig = {
     level: 'debug' | 'info' | 'warn' | 'error';
     transport: 'console';
   };
+  adapters?: {
+    qq?: {
+      enabled?: boolean;
+      wsPort?: number;
+    };
+  };
 };
 
 let cachedConfig: AppConfig | null = null;
@@ -29,6 +35,12 @@ export function loadConfig(): AppConfig {
     logger: {
       level: (cfg?.logger?.level as AppConfig['logger']['level']) ?? 'info',
       transport: 'console',
+    },
+    adapters: {
+      qq: {
+        enabled: cfg?.adapters?.qq?.enabled ?? true,
+        wsPort: cfg?.adapters?.qq?.wsPort ?? 6090,
+      },
     },
   };
   return cachedConfig;
