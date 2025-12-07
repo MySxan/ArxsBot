@@ -2,11 +2,12 @@
 import type { Event, EventType } from '../model/Event.js';
 import type { Action } from '../model/Action.js';
 import type { Context } from '../model/Context.js';
-import type { Intent } from '../model/Intent.js';
+import type { Intent, IntentType } from '../model/Intent.js';
 import type { Logger } from '../../infra/logger/logger.js';
 import { HandlerRegistry, type Handler } from './handlerRegistry.js';
 import { EventRouter, PipelineType } from '../router/eventRouter.js';
 import type { IntentRecognizer } from '../intent/intentRecognizer.js';
+import type { IHandler, HandlerClass } from './IHandler.js';
 
 export type MiddlewareFunc = (
   event: Event,
@@ -36,6 +37,25 @@ export class Dispatcher {
     this.registry.register(key, handler as Handler);
   }
 
+  /**
+   * Register a handler class with metadata.
+   * Automatically scans handler.metadata.intents and registers for each intent type.
+   */
+  public registerHandlerClass(HandlerClass: HandlerClass): void {
+    const instance = new HandlerClass();
+    const { intents, priority = 0, description } = HandlerClass.metadata;
+
+    for (const intentType of intents) {
+      const key = `intent:${intentType}`;
+      this.logger.debug(
+        'dispatcher',
+        `Registering handler for ${intentType} (priority: ${priority})${description ? `: ${description}` : ''}`,
+      );
+      this.registry.register(key, (event, context, intent) =>
+        instance.handle(event, context, intent ?? null),
+      );
+    }
+  }
   public useBefore(middleware: MiddlewareFunc): void {
     this.beforeMiddleware.push(middleware);
   }

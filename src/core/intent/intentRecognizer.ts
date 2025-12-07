@@ -1,7 +1,7 @@
-// 意图识别
 import type { Message } from '../model/Message.js';
 import { IntentType, type Intent, createIntent } from '../model/Intent.js';
 import { getPlainText } from '../model/Message.js';
+import { EventType } from '../model/Event.js';
 
 export class IntentRecognizer {
   /**
@@ -14,16 +14,16 @@ export class IntentRecognizer {
 
     // Empty message, low confidence
     if (!text) {
-      return createIntent(IntentType.SimpleChat, { confidence: 0.1 });
+      return createIntent(IntentType.SimpleChat, EventType.MessageReceived, { confidence: 0.1 });
     }
 
     // TODO: Check for commands (prefix-based)
-    // if (text.startsWith('/')) return createIntent(IntentType.Command);
+    // if (text.startsWith('/')) return createIntent(IntentType.Command, EventType.MessageReceived);
 
     // TODO: Check for questions ("?", "what", "how", etc)
-    // if (text.includes('?')) return createIntent(IntentType.Question);
+    // if (text.includes('?')) return createIntent(IntentType.Question, EventType.MessageReceived);
 
     // Default: all other messages are simple chat
-    return createIntent(IntentType.SimpleChat, { confidence: 1 });
+    return createIntent(IntentType.SimpleChat, EventType.MessageReceived, { confidence: 1 });
   }
 }

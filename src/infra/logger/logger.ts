@@ -9,6 +9,7 @@ export interface Logger {
   error(context: string, message: string): void;
 }
 
+// check if a message at 'level' should be logged given the current log level
 function shouldLog(level: LogLevel, current: LogLevel): boolean {
   const order: LogLevel[] = ['debug', 'info', 'warn', 'error'];
   return order.indexOf(level) >= order.indexOf(current);

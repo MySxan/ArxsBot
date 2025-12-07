@@ -17,11 +17,8 @@ export async function start() {
   const intentRecognizer = new IntentRecognizer();
   dispatcher = new Dispatcher(logger, intentRecognizer);
 
-  // Register handlers
-  const chatAiHandler = new ChatAiHandler();
-  dispatcher.registerHandler(`intent:${IntentType.SimpleChat}`, (event, context, intent) =>
-    chatAiHandler.handle(event, context, intent),
-  );
+  // Register handlers using metadata auto-registration
+  dispatcher.registerHandlerClass(ChatAiHandler);
 
   logger.info('bootstrap', 'Handlers registered');
 }

@@ -35,4 +35,3 @@ webui-frontend/.vite/
 
 # Test artifacts
 tests/tmp/
-# Git 忽略文件配置

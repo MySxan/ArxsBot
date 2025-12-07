@@ -1,43 +1,46 @@
-// 消息处理模块 (暂时全部添加回声处理)
 import type { Event } from '../../core/model/Event.js';
 import type { Context } from '../../core/model/Context.js';
 import type { Intent } from '../../core/model/Intent.js';
 import type { Action } from '../../core/model/Action.js';
 import { IntentType } from '../../core/model/Intent.js';
-import { getPlainText, MessageContentType, type TextSegment } from '../../core/model/Message.js';
-import { ActionType } from '../../core/model/Action.js';
+import { getPlainText, MessageContentType } from '../../core/model/Message.js';
+import { sendMessage } from '../../core/model/Action.js';
+import type { IHandler, HandlerMetadata } from '../../core/dispatcher/IHandler.js';
 
-export class ChatAiHandler {
+export class ChatAiHandler implements IHandler {
+  static readonly metadata: HandlerMetadata = {
+    intents: [IntentType.SimpleChat],
+    priority: 100,
+    description: 'Echo handler for simple chat messages',
+  };
+
   /**
    * Handle chat intents by echoing the message.
-   * Signature matches Handler type: (event, context, intent?) => Promise<Action[]>
    * Later: replace with LLM calls, response post-processing, etc.
    */
-  async handle(event: Event, context: Context, intent?: Intent | null): Promise<Action[]> {
+  async handle(event: Event, context: Context, intent: Intent | null): Promise<Action[]> {
     if (!intent || intent.type !== IntentType.SimpleChat) {
-      return []; // Only handle SimpleChat for now
+      return [];
     }
 
     if (!context.currentMessage) {
-      return []; // No message to echo
+      return [];
     }
 
     const originalText = getPlainText(context.currentMessage);
     const echoText = `${originalText} (echo)`;
 
-    // Build echo response
-    const echoSegment: TextSegment = {
-      type: MessageContentType.Text,
-      data: { text: echoText },
-    };
-
-    const action: Action = {
-      type: ActionType.SendMessage,
-      platform: context.platform,
+    // Build echo response using descriptive action
+    const action = sendMessage({
       channelId: context.channelId,
-      content: [echoSegment],
+      content: [
+        {
+          type: MessageContentType.Text,
+          data: { text: echoText },
+        },
+      ],
       replyTo: context.currentMessage.id,
-    };
+    });
 
     return [action];
   }

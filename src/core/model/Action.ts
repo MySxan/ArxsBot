@@ -1,107 +1,142 @@
-import type { Platform } from './Event.js';
-import type { MessageSegment } from './Message.js';
+/**
+ * Platform-agnostic action description.
+ * Handlers return these, and adapters convert them to platform-specific API calls.
+ */
 
-export enum ActionType {
-  SendMessage = 'send.message',
-  RecallMessage = 'recall.message',
-  EditMessage = 'edit.message',
-  ReactToMessage = 'react.message',
-  RemoveReaction = 'remove.reaction',
-  KickMember = 'kick.member',
-  MuteMember = 'mute.member',
-  UnmuteMember = 'unmute.member',
-  EditAnnouncement = 'edit.announcement',
-  SetGroupName = 'set.group.name',
-  SetUserRole = 'set.user.role',
+export type ActionKind =
+  | 'send_message'
+  | 'recall_message'
+  | 'edit_message'
+  | 'react_to_message'
+  | 'remove_reaction'
+  | 'kick_member'
+  | 'mute_member'
+  | 'unmute_member'
+  | 'edit_announcement'
+  | 'set_group_name'
+  | 'set_user_role'
+  | 'forward_message'
+  | 'invite_to_call';
+
+export interface Action {
+  kind: ActionKind;
+  payload: Record<string, unknown>;
 }
 
-export interface BaseAction {
-  type: ActionType;
-  platform: Platform;
+// ====== Helper factory functions for type safety ======
+
+export interface MessageSegment {
+  type: string;
+  data: unknown;
 }
 
-export interface SendMessageAction extends BaseAction {
-  type: ActionType.SendMessage;
+export function sendMessage(params: {
   channelId: string;
   content: MessageSegment[];
-  replyTo?: string; // message ID to reply to
+  replyTo?: string;
+}): Action {
+  return {
+    kind: 'send_message',
+    payload: params,
+  };
 }
 
-export interface RecallMessageAction extends BaseAction {
-  type: ActionType.RecallMessage;
-  messageId: string;
-  channelId: string;
+export function recallMessage(params: { messageId: string; channelId: string }): Action {
+  return {
+    kind: 'recall_message',
+    payload: params,
+  };
 }
 
-export interface EditMessageAction extends BaseAction {
-  type: ActionType.EditMessage;
+export function editMessage(params: {
   messageId: string;
   channelId: string;
   content: MessageSegment[];
+}): Action {
+  return {
+    kind: 'edit_message',
+    payload: params,
+  };
 }
 
-export interface ReactToMessageAction extends BaseAction {
-  type: ActionType.ReactToMessage;
+export function reactToMessage(params: {
   messageId: string;
   channelId: string;
   emoji: string;
+}): Action {
+  return {
+    kind: 'react_to_message',
+    payload: params,
+  };
 }
 
-export interface RemoveReactionAction extends BaseAction {
-  type: ActionType.RemoveReaction;
+export function removeReaction(params: {
   messageId: string;
   channelId: string;
   emoji: string;
+}): Action {
+  return {
+    kind: 'remove_reaction',
+    payload: params,
+  };
 }
 
-export interface KickMemberAction extends BaseAction {
-  type: ActionType.KickMember;
-  groupId: string;
-  userId: string;
-  reason?: string;
+export function kickMember(params: { groupId: string; userId: string; reason?: string }): Action {
+  return {
+    kind: 'kick_member',
+    payload: params,
+  };
 }
 
-export interface MuteMemberAction extends BaseAction {
-  type: ActionType.MuteMember;
-  groupId: string;
-  userId: string;
-  duration?: number; // seconds, 0 = permanent
+export function muteMember(params: { groupId: string; userId: string; duration?: number }): Action {
+  return {
+    kind: 'mute_member',
+    payload: params,
+  };
 }
 
-export interface UnmuteMemberAction extends BaseAction {
-  type: ActionType.UnmuteMember;
-  groupId: string;
-  userId: string;
+export function unmuteMember(params: { groupId: string; userId: string }): Action {
+  return {
+    kind: 'unmute_member',
+    payload: params,
+  };
 }
 
-export interface EditAnnouncementAction extends BaseAction {
-  type: ActionType.EditAnnouncement;
-  groupId: string;
-  announcement: string;
+export function editAnnouncement(params: { groupId: string; announcement: string }): Action {
+  return {
+    kind: 'edit_announcement',
+    payload: params,
+  };
 }
 
-export interface SetGroupNameAction extends BaseAction {
-  type: ActionType.SetGroupName;
-  groupId: string;
-  name: string;
+export function setGroupName(params: { groupId: string; name: string }): Action {
+  return {
+    kind: 'set_group_name',
+    payload: params,
+  };
 }
 
-export interface SetUserRoleAction extends BaseAction {
-  type: ActionType.SetUserRole;
+export function setUserRole(params: {
   groupId: string;
   userId: string;
   role: 'admin' | 'member';
+}): Action {
+  return {
+    kind: 'set_user_role',
+    payload: params,
+  };
 }
 
-export type Action =
-  | SendMessageAction
-  | RecallMessageAction
-  | EditMessageAction
-  | ReactToMessageAction
-  | RemoveReactionAction
-  | KickMemberAction
-  | MuteMemberAction
-  | UnmuteMemberAction
-  | EditAnnouncementAction
-  | SetGroupNameAction
-  | SetUserRoleAction;
+export function forwardMessage(params: { messageId: string; targetChannelId: string }): Action {
+  return {
+    kind: 'forward_message',
+    payload: params,
+  };
+}
+
+export function inviteToCall(params: { channelId: string; userIds: string[] }): Action {
+  return {
+    kind: 'invite_to_call',
+    payload: params,
+  };
+}
