@@ -5,6 +5,7 @@ import type { CommandRouter } from '../command/CommandRouter.js';
 import type { SimpleReplyer } from '../chat/SimpleReplyer.js';
 import type { ConversationStore } from '../memory/ConversationStore.js';
 import { plan } from '../planner/simplePlanner.js';
+import { splitHumanLike, getRandomDelay } from '../style/utteranceSplitter.js';
 
 /**
  * Utility function for async sleep
@@ -93,8 +94,18 @@ export class MainRouter {
               timestamp: Date.now(),
             });
 
-            // Step 4: Send the reply
-            await this.sender.sendText(event.groupId, replyText);
+            // Step 4: Split reply into natural utterance chunks
+            const chunks = splitHumanLike(replyText);
+
+            // Step 5: Send chunks with human-like delays between them
+            for (const chunk of chunks) {
+              await this.sender.sendText(event.groupId, chunk);
+              // Add random delay between messages (0.5-1.2 seconds)
+              if (chunk !== chunks[chunks.length - 1]) {
+                const delay = getRandomDelay(500, 1200);
+                await sleep(delay);
+              }
+            }
           } else {
             // Fallback if LLM or conversation store not configured
             this.logger.warn('router', 'Replyer or conversation store not configured');
