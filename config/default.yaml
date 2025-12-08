@@ -6,9 +6,18 @@ logger:
   transport: console
 logging:
   color: true
-  level: info
+  level: debug
 adapters:
   qq:
     enabled: true
     wsPort: 6090
     token:
+
+# LLM configuration (for chat replies)
+llm:
+  enabled: true # LLM enabled with DeepSeek
+  baseUrl: https://api.deepseek.com/v1 # DeepSeek API (cheaper, better for Chinese)
+  apiKey: # Set via LLM_API_KEY env var
+  model: deepseek-chat # DeepSeek's chat model
+  temperature: 1
+  maxTokens: 2000

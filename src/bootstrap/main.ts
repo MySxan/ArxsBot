@@ -1,56 +1,71 @@
 import { config, loadConfig } from '../infra/config/config.js';
 import { createLogger } from '../infra/logger/logger.js';
-import { Dispatcher } from '../core/dispatcher/dispatcher.js';
-import { IntentRecognizer } from '../core/intent/intentRecognizer.js';
-import { ChatAiHandler } from '../apps/chatAi/chatAiHandler.js';
-import { startMockAdapter } from '../adapter/index.js';
-import { NapcatClient } from '../adapter/qq/napcatClient.js';
-import { loggingMiddleware } from '../core/dispatcher/middleware/loggingMiddleware.js';
-import { createActionSecurityMiddleware } from '../security/middleware/actionSecurity.js';
+import { MainRouter } from '../core/router/MainRouter.js';
+import { CommandRouter } from '../core/command/CommandRouter.js';
+import { PingCommand, HelpCommand, DebugCommand } from '../core/command/builtin/index.js';
+import { OpenAICompatibleClient } from '../core/llm/openaiClient.js';
+import { SimpleReplyer } from '../core/chat/SimpleReplyer.js';
+import { InMemoryConversationStore } from '../core/memory/ConversationStore.js';
+import { QQAdapter } from '../adapter/qq/QQAdapter.js';
 
-let dispatcher: Dispatcher | null = null;
+let qqAdapter: QQAdapter | null = null;
 
 export async function start() {
-  // Load/create config and create logger
+  // Load config and create logger
   const cfg = config || loadConfig();
   const logger = createLogger(cfg);
-  logger.info('bootstrap', `Starting ${cfg.app.name} in ${cfg.app.env}`);
-
-  // Initialize intent recognizer and dispatcher
-  const intentRecognizer = new IntentRecognizer();
-  dispatcher = new Dispatcher(logger, intentRecognizer);
-
-  // Register logging middleware for visibility
-  dispatcher.useBefore((event, context, next) => loggingMiddleware(event, context, next, logger));
-
-  // Register action security middleware (sanitize/truncate outputs)
-  dispatcher.useAfter((event, context, next) =>
-    createActionSecurityMiddleware(logger)(event, context, next),
+  logger.info(
+    'bootstrap',
+    `Starting ${cfg.app.name} in ${cfg.app.env} (with Planner + Commands + LLM)`,
   );
 
-  // Register handlers using metadata auto-registration
-  dispatcher.registerHandlerClass(ChatAiHandler);
+  // Create a dummy sender for router initialization
+  // This will be replaced per-connection in QQAdapter
+  const dummySender: any = {
+    sendText: async () => {
+      throw new Error('Sender not initialized');
+    },
+  };
 
-  logger.info('bootstrap', 'Handlers registered');
+  // Initialize conversation store for multi-turn conversations
+  const conversationStore = new InMemoryConversationStore();
 
-  // Start QQ/NapCat adapter if enabled
-  if (cfg.adapters?.qq?.enabled) {
-    logger.info('bootstrap', 'Starting QQ/NapCat adapter...');
-    const napcatClient = new NapcatClient(
-      dispatcher,
-      logger,
-      cfg.adapters.qq.wsPort,
-      cfg.adapters.qq.token,
-    );
-    napcatClient.start();
-  } else if (cfg.adapters?.qq) {
-    logger.warn('bootstrap', 'QQ/NapCat adapter disabled (missing token or config)');
+  // Initialize command router with builtin commands
+  const commandRouter = new CommandRouter(dummySender, logger, [
+    PingCommand,
+    HelpCommand,
+    DebugCommand,
+  ]);
+
+  // Initialize LLM client and replyer if enabled
+  let replyer: SimpleReplyer | undefined;
+  if (cfg.llm?.enabled && cfg.llm.apiKey) {
+    logger.info('bootstrap', `Initializing LLM (${cfg.llm.model})...`);
+    const llmClient = new OpenAICompatibleClient(logger, {
+      baseUrl: cfg.llm.baseUrl!,
+      apiKey: cfg.llm.apiKey,
+      model: cfg.llm.model!,
+      temperature: cfg.llm.temperature,
+      maxTokens: cfg.llm.maxTokens,
+    });
+    replyer = new SimpleReplyer(llmClient, logger, conversationStore);
+  } else {
+    logger.warn('bootstrap', 'LLM not configured - smalltalk will use simple echo fallback');
   }
 
-  // Start mock CLI adapter for development
-  // startMockAdapter(dispatcher);
+  // Initialize main router with command router, replyer, and conversation store
+  const router = new MainRouter(logger, dummySender, commandRouter, replyer, conversationStore);
+
+  // Start QQ adapter if enabled
+  if (cfg.adapters?.qq?.enabled) {
+    logger.info('bootstrap', 'Starting QQ adapter...');
+    qqAdapter = new QQAdapter(router, logger, cfg.adapters.qq.wsPort, cfg.adapters.qq.token);
+    qqAdapter.start();
+  } else if (cfg.adapters?.qq) {
+    logger.warn('bootstrap', 'QQ adapter disabled (missing token or config)');
+  }
 }
 
-export function getDispatcher(): Dispatcher | null {
-  return dispatcher;
+export function getQQAdapter(): QQAdapter | null {
+  return qqAdapter;
 }

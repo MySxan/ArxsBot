@@ -1,10 +1,5 @@
 import { z } from 'zod';
-import type { Event } from '../../core/model/Event.js';
-import type { Message } from '../../core/model/Message.js';
-import type { User } from '../../core/model/User.js';
-import type { Group } from '../../core/model/Group.js';
-import { MessageContentType } from '../../core/model/Message.js';
-import { EventType as ArxsEventType } from '../../core/model/Event.js';
+import type { ChatEvent } from '../../core/model/ChatEvent.js';
 
 /**
  * OneBot11 message format:
@@ -54,7 +49,7 @@ const OB11MessageSchema = z.object({
   group_id: z.number().optional(),
   message_id: z.number().optional(),
   time: z.number(),
-  self_id: z.number(),
+  self_id: z.number().optional(),
   sender: z
     .object({
       user_id: z.number(),
@@ -65,58 +60,35 @@ const OB11MessageSchema = z.object({
 });
 
 /**
- * Map OneBot11 message to ArxsBot MessageReceivedEvent.
+ * Map OneBot11 message to simplified ChatEvent.
+ * This is the clean interface for event handling.
  */
-export function mapOneBot11ToEvent(raw: unknown): Event | null {
+export function mapToChatEvent(raw: unknown): ChatEvent | null {
   const parsed = OB11MessageSchema.safeParse(raw);
   if (!parsed.success) {
-    return null; // Reject invalid schema
+    return null;
   }
 
   const msg = parsed.data;
 
-  const textSegments = msg.message.map((seg) => ({
-    type: MessageContentType.Text,
-    data: { text: seg.data.text ?? '' },
-  }));
+  // Extract plain text
+  const rawText = msg.message.map((seg) => seg.data.text ?? '').join('');
 
-  // Create user
-  const user: User = {
-    id: String(msg.user_id),
+  // Check if bot is mentioned (basic check - can be enhanced)
+  const mentionsBot = rawText.includes('@') || rawText.includes('bot');
+
+  const chatEvent: ChatEvent = {
     platform: 'qq',
-    displayName: msg.sender?.nickname ?? msg.sender?.card ?? `User${msg.user_id}`,
-    username: msg.sender?.nickname,
-  };
-
-  // Create message
-  const message: Message = {
-    id: String(msg.message_id ?? 0),
-    channelId: msg.message_type === 'group' ? String(msg.group_id ?? 0) : String(msg.user_id),
+    groupId: msg.message_type === 'group' ? String(msg.group_id ?? 0) : String(msg.user_id),
     userId: String(msg.user_id),
-    platform: 'qq',
-    timestamp: msg.time * 1000, // Convert from seconds to milliseconds
-    content: textSegments,
-    author: user,
+    messageId: String(msg.message_id ?? 0),
+    rawText,
+    timestamp: msg.time * 1000,
+    mentionsBot,
+    userName: msg.sender?.nickname ?? msg.sender?.card ?? `User${msg.user_id}`,
+    groupName: msg.message_type === 'group' ? `Group${msg.group_id}` : undefined,
+    isPrivate: msg.message_type === 'private',
   };
 
-  // Create group if group message
-  let group: Group | undefined;
-  if (msg.message_type === 'group' && msg.group_id) {
-    group = {
-      id: String(msg.group_id),
-      platform: 'qq',
-      displayName: `Group${msg.group_id}`,
-    };
-  }
-
-  // Create event
-  const event: Event = {
-    type: ArxsEventType.MessageReceived,
-    platform: 'qq',
-    timestamp: Date.now(),
-    message,
-    ...(group && { group }),
-  };
-
-  return event;
+  return chatEvent;
 }

@@ -22,6 +22,14 @@ export type AppConfig = {
       token?: string;
     };
   };
+  llm?: {
+    enabled?: boolean;
+    baseUrl?: string;
+    apiKey?: string;
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+  };
 };
 
 let cachedConfig: AppConfig | null = null;
@@ -53,6 +61,14 @@ export function loadConfig(): AppConfig {
           ? String(cfg.adapters.qq.token)
           : process.env.QQ_ADAPTER_TOKEN,
       },
+    },
+    llm: {
+      enabled: cfg?.llm?.enabled ?? false,
+      baseUrl: cfg?.llm?.baseUrl ?? process.env.LLM_BASE_URL ?? 'https://api.deepseek.com/v1',
+      apiKey: cfg?.llm?.apiKey ?? process.env.LLM_API_KEY,
+      model: cfg?.llm?.model ?? process.env.LLM_MODEL ?? 'deepseek-chat',
+      temperature: cfg?.llm?.temperature ?? 1,
+      maxTokens: cfg?.llm?.maxTokens ?? 2000,
     },
   };
 
