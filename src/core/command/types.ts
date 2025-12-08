@@ -13,6 +13,9 @@ export interface CommandContext {
 
   /** Message sender for replying */
   sender: MessageSender;
+
+  /** Optional: Main router reference for accessing stores */
+  router?: any;
 }
 
 /**

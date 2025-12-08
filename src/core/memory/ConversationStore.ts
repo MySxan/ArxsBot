@@ -5,6 +5,11 @@ export interface ChatTurn {
   role: 'user' | 'bot';
   content: string;
   timestamp: number;
+  userId?: string; // Which user said this (for stats/analytics)
+  userName?: string; // Display name / nickname if available
+  // Derived information for context analysis
+  mentionsBot?: boolean;
+  isCommand?: boolean;
 }
 
 /**
@@ -13,8 +18,15 @@ export interface ChatTurn {
 export interface ConversationStore {
   appendTurn(key: string, turn: ChatTurn): void;
   getRecentTurns(key: string, limit: number): ChatTurn[];
+  getTurnsSince(key: string, sinceTs: number): ChatTurn[];
+  getTurnsInWindow(key: string, windowMs: number): ChatTurn[];
   clear(key: string): void;
 }
+
+import { config } from '../../infra/config/config.js';
+import { createLogger } from '../../infra/logger/logger.js';
+
+const logger = createLogger(config);
 
 /**
  * In-memory implementation of conversation store
@@ -35,9 +47,11 @@ export class InMemoryConversationStore implements ConversationStore {
     // Keep only the most recent turns
     if (arr.length > this.maxTurnsPerKey) {
       arr.splice(0, arr.length - this.maxTurnsPerKey);
+      logger.debug('memory', `Conversation store ${key} trimmed to ${this.maxTurnsPerKey} turns`);
     }
 
     this.store.set(key, arr);
+    logger.debug('memory', `Appended ${turn.role} turn to ${key} (now ${arr.length} turns)`);
   }
 
   /**
@@ -46,6 +60,23 @@ export class InMemoryConversationStore implements ConversationStore {
   getRecentTurns(key: string, limit: number): ChatTurn[] {
     const arr = this.store.get(key) ?? [];
     return arr.slice(-limit);
+  }
+
+  /**
+   * Get all turns since a specific timestamp
+   */
+  getTurnsSince(key: string, sinceTs: number): ChatTurn[] {
+    const arr = this.store.get(key) ?? [];
+    return arr.filter((t) => t.timestamp >= sinceTs);
+  }
+
+  /**
+   * Get all turns within a time window (from now - windowMs to now)
+   */
+  getTurnsInWindow(key: string, windowMs: number): ChatTurn[] {
+    const arr = this.store.get(key) ?? [];
+    const cutoff = Date.now() - windowMs;
+    return arr.filter((t) => t.timestamp >= cutoff);
   }
 
   /**

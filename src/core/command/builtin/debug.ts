@@ -1,3 +1,4 @@
+import { getLastPlanDebug, getLastReplyPlanDebug } from '../../planner/simplePlanner.js';
 import type { CommandHandler } from '../types.js';
 
 /**
@@ -8,27 +9,58 @@ export const DebugCommand: CommandHandler = {
   aliases: ['状态', 'status'],
   description: '显示机器人内部状态',
 
-  async run({ event, sender }) {
-    const now = new Date();
-    const uptime = process.uptime();
-    const memUsage = process.memoryUsage();
+  async run({ event, sender, router }) {
+    const groupKey = `${event.platform}:${event.groupId}`;
+    const lastPlan = getLastPlanDebug(groupKey);
+    const conversationStore = (router as any)?.conversationStore;
+    const memberStats = (router as any)?.memberStats;
 
-    const debugInfo = `🔧 调试信息
+    // Section 1: Last processed message user stats
+    const userStatsSection = lastPlan
+      ? (() => {
+          const memberKey = memberStats?.buildMemberKey(
+            lastPlan.event.platform,
+            lastPlan.event.groupId,
+            lastPlan.event.userId,
+          );
+          return {
+            user: lastPlan.event.userName || lastPlan.event.userId,
+            plan: {
+              shouldReply: lastPlan.result.shouldReply,
+              mode: lastPlan.result.mode,
+              probability: lastPlan.result.meta?.replyProbability?.toFixed(2),
+            },
+            stats:
+              memberKey && memberStats
+                ? {
+                    intimacy: memberStats.getIntimacy(memberKey).toFixed(2),
+                    msgRate: memberStats.getUserMessageRate(memberKey).toFixed(2),
+                    repetition: memberStats.getUserRepetitionScore(memberKey).toFixed(2),
+                    botEnergy: lastPlan.result.meta?.botEnergy?.toFixed(2),
+                    groupActivity: lastPlan.result.meta?.groupActivity?.toFixed(2),
+                    baseInterest: lastPlan.result.meta?.baseInterest?.toFixed(2),
+                    socialAttention: lastPlan.result.meta?.socialAttention?.toFixed(2),
+                    talkativeness: lastPlan.result.meta?.personaTalkativeness?.toFixed(2),
+                    spamType: lastPlan.result.meta?.spamType,
+                    urgency: lastPlan.result.meta?.urgencyScore?.toFixed(2),
+                  }
+                : 'no stats',
+            reason: lastPlan.result.debugReason,
+          };
+        })()
+      : 'no plan yet';
 
-⏰ 时间：${now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}
-📊 运行时长：${Math.floor(uptime / 60)}分${Math.floor(uptime % 60)}秒
-💾 内存使用：${Math.round(memUsage.heapUsed / 1024 / 1024)}MB / ${Math.round(memUsage.heapTotal / 1024 / 1024)}MB
+    // Section 2: Recent 10 messages
+    const history = conversationStore?.getRecentTurns(groupKey, 10) ?? [];
+    const messagesSection = history
+      .map((turn: { role: string; userName: any; userId: any; content: any }) => {
+        const userId = turn.role === 'bot' ? 'bot' : turn.userName || turn.userId || 'unknown';
+        return `${userId}: ${turn.content}`;
+      })
+      .join('\n');
 
-📨 消息信息：
-- 平台：${event.platform}
-- 群组：${event.groupId}
-- 用户：${event.userId}
-- 消息ID：${event.messageId}
-- @机器人：${event.mentionsBot ? '是' : '否'}
+    const output = `【上次处理】\n${JSON.stringify(userStatsSection, null, 2)}\n\n【最近消息】\n${messagesSection || 'no history'}`;
 
-📝 消息内容：
-${event.rawText.substring(0, 100)}${event.rawText.length > 100 ? '...' : ''}`;
-
-    await sender.sendText(event.groupId, debugInfo);
+    await sender.sendText(event.groupId, output);
   },
 };

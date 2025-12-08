@@ -26,6 +26,10 @@ export class OpenAICompatibleClient implements LLMClient {
 
   async chat(messages: LLMMessage[]): Promise<string> {
     const startTime = Date.now();
+    this.logger.debug(
+      'llm-client',
+      `Chat request: ${messages.length} messages, model=${this.model}, temp=${this.temperature}`,
+    );
 
     try {
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -44,6 +48,10 @@ export class OpenAICompatibleClient implements LLMClient {
 
       if (!response.ok) {
         const errorText = await response.text();
+        this.logger.error(
+          'llm-client',
+          `LLM API error (${response.status}): ${errorText.substring(0, 100)}`,
+        );
         throw new Error(`LLM API error (${response.status}): ${errorText}`);
       }
 

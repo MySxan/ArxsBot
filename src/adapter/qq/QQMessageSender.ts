@@ -20,6 +20,10 @@ export class QQMessageSender implements MessageSender {
   async sendText(groupId: string, text: string, replyTo?: string): Promise<void> {
     // Add human-like delay (900-1500ms)
     const delay = 900 + Math.random() * 600;
+    this.logger.debug(
+      'qq-sender',
+      `Queuing message (delay: ${delay.toFixed(0)}ms): "${text.substring(0, 40)}..."`,
+    );
     await new Promise((resolve) => setTimeout(resolve, delay));
 
     // Build OneBot11 message
@@ -36,7 +40,18 @@ export class QQMessageSender implements MessageSender {
       },
     };
 
-    this.logger.debug('qq-sender', `Sending to group ${groupId}: "${text.substring(0, 30)}..."`);
-    this.ws.send(JSON.stringify(message));
+    try {
+      this.logger.info(
+        'qq-sender',
+        `Sending to group ${groupId}: "${text.substring(0, 40)}..." (${text.length} chars)`,
+      );
+      this.ws.send(JSON.stringify(message));
+    } catch (error) {
+      this.logger.error(
+        'qq-sender',
+        `Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
   }
 }

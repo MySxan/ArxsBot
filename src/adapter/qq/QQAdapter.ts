@@ -127,9 +127,9 @@ export class QQAdapter {
    * Handle incoming OneBot11 message - normalize to ChatEvent and forward to router.
    */
   private async handleMessage(raw: OneBot11Message): Promise<void> {
-    const chatEvent = mapToChatEvent(raw);
+    const chatEvent = mapToChatEvent(raw, this.logger);
     if (!chatEvent) {
-      return; // Invalid event, ignore
+      return; // Invalid event or self-message, ignore
     }
 
     // Forward to main router

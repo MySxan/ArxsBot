@@ -1,11 +1,11 @@
 /**
  * Split human-like text into natural utterance chunks
- * 
+ *
  * Splits on sentence boundaries (。！？!?\n) first,
  * then for longer parts, splits on commas (，,)
- * 
+ *
  * Example:
- * "你好啊！我是机器人。最近天气不错，太阳很充足。" 
+ * "你好啊！我是机器人。最近天气不错，太阳很充足。"
  * => ["你好啊！", "我是机器人。", "最近天气不错，", "太阳很充足。"]
  */
 export function splitHumanLike(text: string): string[] {

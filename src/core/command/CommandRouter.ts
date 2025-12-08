@@ -8,12 +8,15 @@ import type { Logger } from '../../infra/logger/logger.js';
  */
 export class CommandRouter {
   private commandMap: Map<string, CommandHandler> = new Map();
+  private router?: any;
 
   constructor(
     private sender: MessageSender,
     private logger: Logger,
     commands: CommandHandler[],
+    router?: any,
   ) {
+    this.router = router;
     // Register all commands and their aliases
     for (const cmd of commands) {
       this.commandMap.set(cmd.name, cmd);
@@ -47,14 +50,22 @@ export class CommandRouter {
 
     // Execute command
     try {
-      this.logger.debug('command-router', `Executing command: ${name}`);
+      this.logger.info(
+        'command-router',
+        `Executing command: /${name} (args: ${args.length}, from ${event.userId})`,
+      );
       await handler.run({
         event,
         args,
         sender: this.sender,
+        router: this.router,
       });
+      this.logger.debug('command-router', `Command /${name} completed`);
     } catch (error) {
-      this.logger.error('command-router', `Command ${name} failed: ${error}`);
+      this.logger.error(
+        'command-router',
+        `Command ${name} failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
       await this.sender.sendText(event.groupId, `指令执行失败：${name}`);
     }
   }

@@ -33,6 +33,9 @@ export interface ChatEvent {
   /** Optional: Is private message (DM) */
   isPrivate?: boolean;
 
+  /** Whether this message is from the bot itself (to avoid self-loops and self-stats) */
+  fromBot?: boolean;
+
   // Future extensions:
   // attachments?: Attachment[];
   // replyTo?: string;

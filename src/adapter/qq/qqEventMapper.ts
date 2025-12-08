@@ -63,13 +63,22 @@ const OB11MessageSchema = z.object({
  * Map OneBot11 message to simplified ChatEvent.
  * This is the clean interface for event handling.
  */
-export function mapToChatEvent(raw: unknown): ChatEvent | null {
+export function mapToChatEvent(
+  raw: unknown,
+  logger?: { debug: (tag: string, msg: string) => void },
+): ChatEvent | null {
   const parsed = OB11MessageSchema.safeParse(raw);
   if (!parsed.success) {
     return null;
   }
 
   const msg = parsed.data;
+
+  // Drop messages sent by the bot itself to avoid self-trigger loops
+  if (msg.self_id && msg.user_id === msg.self_id) {
+    logger?.debug('qq-mapper', `Filtered self message from bot ${msg.self_id}`);
+    return null;
+  }
 
   // Extract plain text
   const rawText = msg.message.map((seg) => seg.data.text ?? '').join('');

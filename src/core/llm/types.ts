@@ -22,13 +22,13 @@ export interface LLMClient {
  * LLM configuration
  */
 export interface LLMConfig {
-  /** API base URL (e.g., https://api.deepseek.com/v1) */
+  /** API base URL */
   baseUrl: string;
 
   /** API key */
   apiKey: string;
 
-  /** Model name (e.g., deepseek-chat) */
+  /** Model name */
   model: string;
 
   /** Temperature (0-2, default 1) */

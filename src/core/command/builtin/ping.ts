@@ -10,6 +10,6 @@ export const PingCommand: CommandHandler = {
 
   async run({ event, sender }) {
     const latency = Date.now() - event.timestamp;
-    await sender.sendText(event.groupId, `🏓 pong! (延迟: ${latency}ms)`);
+    await sender.sendText(event.groupId, `pong! ${latency}ms`);
   },
 };
