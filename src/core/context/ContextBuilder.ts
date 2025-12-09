@@ -6,7 +6,7 @@
  * 3. 怎么営：上下文在 prompt 里长什么样（PromptBuilder）
  */
 
-import type { ChatEvent } from '../model/ChatEvent.js';
+import type { ChatEvent } from '../events/ChatEvent.js';
 import type { ConversationStore, ChatTurn } from '../memory/ConversationStore.js';
 import { config } from '../../infra/config/config.js';
 import { createLogger } from '../../infra/logger/logger.js';

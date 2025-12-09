@@ -1,16 +1,16 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { URL } from 'node:url';
 import type { Logger } from '../../infra/logger/logger.js';
-import type { MainRouter } from '../../core/router/MainRouter.js';
-import { mapToChatEvent, type OneBot11Message } from './qqEventMapper.js';
+import type { ConversationRouter } from '../../core/conversation/ConversationRouter.js';
+import { mapToChatEvent, type OneBot11Message } from './QQEventMapper.js';
 import { QQMessageSender } from './QQMessageSender.js';
 
 /**
  * QQ/NapCat adapter - handles OneBot11 protocol.
- * Normalizes all events to ChatEvent and forwards to MainRouter.
+ * Normalizes all events to ChatEvent and forwards to ConversationRouter.
  */
 export class QQAdapter {
-  private router: MainRouter;
+  private router: ConversationRouter;
   private logger: Logger;
   private wsPort: number;
   private wsPath: string;
@@ -18,7 +18,7 @@ export class QQAdapter {
   private wss: WebSocketServer | null = null;
   private connections: Set<WebSocket> = new Set();
 
-  constructor(router: MainRouter, logger: Logger, wsPort: number = 6090, token?: string) {
+  constructor(router: ConversationRouter, logger: Logger, wsPort: number = 6090, token?: string) {
     this.router = router;
     this.logger = logger;
     this.wsPort = wsPort;

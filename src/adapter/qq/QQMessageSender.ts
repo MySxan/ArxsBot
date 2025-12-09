@@ -1,7 +1,7 @@
-import type { ChatEvent } from '../../core/model/ChatEvent.js';
+import type { ChatEvent } from '../../core/events/ChatEvent.js';
 import type { MessageSender } from '../../core/messaging/MessageSender.js';
 import type { Logger } from '../../infra/logger/logger.js';
-import type { OneBot11Message } from './qqEventMapper.js';
+import type { OneBot11Message } from './QQEventMapper.js';
 import { WebSocket } from 'ws';
 
 /**

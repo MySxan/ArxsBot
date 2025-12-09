@@ -1,4 +1,4 @@
-import { getLastPlanDebug, getLastReplyPlanDebug } from '../../planner/simplePlanner.js';
+import { getLastPlanDebug, getLastReplyPlanDebug } from '../../planner/ChatPlanner.js';
 import type { CommandHandler } from '../types.js';
 
 /**

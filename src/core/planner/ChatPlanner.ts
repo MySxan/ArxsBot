@@ -1,9 +1,9 @@
-import type { ChatEvent } from '../model/ChatEvent.js';
+import type { ChatEvent } from '../events/ChatEvent.js';
 import type { PlanResult, ReplyMode } from './types.js';
 import type { MemberStatsStore } from '../memory/MemberStatsStore.js';
 import { SpamType } from '../memory/MemberStatsStore.js';
-import { globalEnergyModel } from './energyModel.js';
-import { getGroupActivity, recordGroupMessage } from './groupActivityTracker.js';
+import { globalEnergyModel } from './EnergyModel.js';
+import { getGroupActivity, recordGroupMessage } from './GroupActivityTracker.js';
 
 export interface PlanDebugInfo {
   event: Pick<

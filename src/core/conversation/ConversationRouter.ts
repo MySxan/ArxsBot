@@ -1,13 +1,13 @@
-import type { ChatEvent } from '../model/ChatEvent.js';
+import type { ChatEvent } from '../events/ChatEvent.js';
 import type { MessageSender } from '../messaging/MessageSender.js';
 import type { Logger } from '../../infra/logger/logger.js';
 import type { CommandRouter } from '../command/CommandRouter.js';
-import type { SimpleReplyer } from '../chat/SimpleReplyer.js';
+import type { LlmReplyGenerator } from '../chat/LlmReplyGenerator.js';
 import type { ConversationStore } from '../memory/ConversationStore.js';
 import type { MemberStatsStore } from '../memory/MemberStatsStore.js';
-import { plan, recordReplyPlan, type PlanDebugInfo } from '../planner/simplePlanner.js';
+import { plan, recordReplyPlan, type PlanDebugInfo } from '../planner/ChatPlanner.js';
 import { UtterancePlanner } from '../style/UtterancePlanner.js';
-import { globalEnergyModel } from '../planner/energyModel.js';
+import { globalEnergyModel } from '../planner/EnergyModel.js';
 import { PromptBuilder, type DynamicStyleParams } from '../style/PromptBuilder.js';
 import { ContextBuilder } from '../context/ContextBuilder.js';
 
@@ -22,11 +22,11 @@ function sleep(ms: number): Promise<void> {
  * Main event router - handles all incoming chat events.
  * Flow: Event → Planner → Command/Chat handler → Response
  */
-export class MainRouter {
+export class ConversationRouter {
   private logger: Logger;
   private sender: MessageSender;
   private commandRouter?: CommandRouter;
-  private replyer?: SimpleReplyer;
+  private replyer?: LlmReplyGenerator;
   private conversationStore?: ConversationStore;
   private memberStats?: MemberStatsStore;
   private utterancePlanner: UtterancePlanner;
@@ -38,7 +38,7 @@ export class MainRouter {
     logger: Logger,
     sender: MessageSender,
     commandRouter?: CommandRouter,
-    replyer?: SimpleReplyer,
+    replyer?: LlmReplyGenerator,
     conversationStore?: ConversationStore,
     memberStats?: MemberStatsStore,
   ) {

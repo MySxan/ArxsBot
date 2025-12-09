@@ -1,16 +1,16 @@
-import type { ChatEvent } from '../../core/model/ChatEvent.js';
-import type { LLMClient, LLMMessage } from '../../core/llm/types.js';
+import type { ChatEvent } from '../events/ChatEvent.js';
+import type { LLMClient, LLMMessage } from '../llm/types.js';
 import type { Logger } from '../../infra/logger/logger.js';
 import type { ConversationStore } from '../memory/ConversationStore.js';
-import type { Persona } from '../persona/types.js';
-import { DefaultPersona } from '../persona/types.js';
+import type { Persona } from '../persona/PersonaTypes.js';
+import { DefaultPersona } from '../persona/PersonaTypes.js';
 
 /**
  * Simple chat replyer using LLM with conversation context and persona
  * Maintains short-term conversation history per group to support multi-turn chat
  * Applies a consistent persona to shape the bot's personality
  */
-export class SimpleReplyer {
+export class LlmReplyGenerator {
   private persona: Persona;
   private historyLimit = 8; // Use last 8 turns for context
 

@@ -1,4 +1,4 @@
-import type { ChatEvent } from '../model/ChatEvent.js';
+import type { ChatEvent } from '../events/ChatEvent.js';
 import type { MessageSender } from '../messaging/MessageSender.js';
 import type { CommandHandler } from './types.js';
 import type { Logger } from '../../infra/logger/logger.js';

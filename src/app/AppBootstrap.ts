@@ -1,6 +1,6 @@
 import { config, loadConfig } from '../infra/config/config.js';
 import { createLogger } from '../infra/logger/logger.js';
-import { MainRouter } from '../core/router/MainRouter.js';
+import { ConversationRouter } from '../core/conversation/ConversationRouter.js';
 import { CommandRouter } from '../core/command/CommandRouter.js';
 import {
   PingCommand,
@@ -8,8 +8,8 @@ import {
   DebugCommand,
   ContextCommand,
 } from '../core/command/builtin/index.js';
-import { OpenAICompatibleClient } from '../core/llm/openaiClient.js';
-import { SimpleReplyer } from '../core/chat/SimpleReplyer.js';
+import { OpenAICompatibleClient } from '../core/llm/OpenAIClient.js';
+import { LlmReplyGenerator } from '../core/chat/LlmReplyGenerator.js';
 import { InMemoryConversationStore } from '../core/memory/ConversationStore.js';
 import { MemberStatsStore } from '../core/memory/MemberStatsStore.js';
 import { QQAdapter } from '../adapter/qq/QQAdapter.js';
@@ -38,7 +38,7 @@ export async function start() {
   const memberStats = new MemberStatsStore();
 
   // Initialize main router with conversation store and member stats
-  const router = new MainRouter(
+  const router = new ConversationRouter(
     logger,
     dummySender,
     undefined, // commandRouter will be set below
@@ -60,7 +60,7 @@ export async function start() {
   (router as any).commandRouter = commandRouter;
 
   // Initialize LLM client and replyer if enabled
-  let replyer: SimpleReplyer | undefined;
+  let replyer: LlmReplyGenerator | undefined;
   if (cfg.llm?.enabled && cfg.llm.apiKey) {
     logger.info('bootstrap', `Initializing LLM (${cfg.llm.model})...`);
     const llmClient = new OpenAICompatibleClient(logger, {
@@ -70,7 +70,7 @@ export async function start() {
       temperature: cfg.llm.temperature,
       maxTokens: cfg.llm.maxTokens,
     });
-    replyer = new SimpleReplyer(llmClient, logger, conversationStore);
+    replyer = new LlmReplyGenerator(llmClient, logger, conversationStore);
     (router as any).replyer = replyer;
   } else {
     logger.warn('bootstrap', 'LLM not configured - smalltalk will use simple echo fallback');

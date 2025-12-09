@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { start } from './bootstrap/main.js';
+import { start } from './app/AppBootstrap.js';
 
 async function main() {
   await start();

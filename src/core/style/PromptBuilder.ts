@@ -2,7 +2,7 @@
  * PromptBuilder: 负责根据行为规划、个性、记忆等参数生成最终 System Prompt
  * 职责:组装固定约束 + 动态参数 → 结构化 System Prompt
  */
-import type { Persona } from '../persona/types.js';
+import type { Persona } from '../persona/PersonaTypes.js';
 import type { PlanResult } from '../planner/types.js';
 import type { ChatTurn } from '../memory/ConversationStore.js';
 import type { ReplyContext } from '../context/ContextBuilder.js';

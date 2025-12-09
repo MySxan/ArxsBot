@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ChatEvent } from '../../core/model/ChatEvent.js';
+import type { ChatEvent } from '../../core/events/ChatEvent.js';
 
 /**
  * OneBot11 message format:
