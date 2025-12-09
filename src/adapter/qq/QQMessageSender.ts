@@ -18,14 +18,7 @@ export class QQMessageSender implements MessageSender {
   }
 
   async sendText(groupId: string, text: string, replyTo?: string): Promise<void> {
-    // Add human-like delay (900-1500ms)
-    const delay = 900 + Math.random() * 600;
-    this.logger.debug(
-      'qq-sender',
-      `Queuing message (delay: ${delay.toFixed(0)}ms): "${text.substring(0, 40)}..."`,
-    );
-    await new Promise((resolve) => setTimeout(resolve, delay));
-
+    // Delay handled by ConversationRouter (typing delay + segment pacing)
     // Build OneBot11 message
     const message = {
       action: 'send_group_msg',

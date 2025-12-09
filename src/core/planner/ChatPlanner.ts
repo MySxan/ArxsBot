@@ -41,6 +41,7 @@ export function plan(event: ChatEvent, memberStats?: MemberStatsStore): PlanResu
   const text = event.rawText.trim();
   const groupKey = `${event.platform}:${event.groupId}`;
   const memberKey = memberStats?.buildMemberKey(event.platform, event.groupId, event.userId);
+  const now = event.timestamp ?? Date.now();
 
   // Record activity for this group (skip bot's own messages to avoid stat pollution)
   if (!event.fromBot) {
@@ -72,6 +73,45 @@ export function plan(event: ChatEvent, memberStats?: MemberStatsStore): PlanResu
     };
   }
 
+  // 2.5 冷却策略：刚回完 5 秒内必不回；5~12 秒内大概率观望
+  const lastReply = getLastReplyPlanDebug(groupKey);
+  const sinceLastBotMs = lastReply ? now - lastReply.timestamp : Infinity;
+
+  if (!event.mentionsBot && !isQuestion(text) && !hasStrongEmotion(text)) {
+    // 硬冷却：5 秒内直接略过
+    if (sinceLastBotMs < 5000) {
+      return {
+        shouldReply: false,
+        mode: 'ignore',
+        delayMs: 0,
+        meta: {
+          reason: 'cooldown-hard',
+          sinceLastBotMs,
+          cooldownMs: 5000,
+          baseInterest: calculateBaseInterest(text),
+        },
+      };
+    }
+
+    // 软观望：5~12 秒内随机略过，显得“懒得理你”
+    if (sinceLastBotMs < 12000) {
+      const skipProb = 0.65;
+      if (Math.random() < skipProb) {
+        return {
+          shouldReply: false,
+          mode: 'ignore',
+          delayMs: 0,
+          meta: {
+            reason: 'cooldown-soft',
+            sinceLastBotMs,
+            skipProb,
+            baseInterest: calculateBaseInterest(text),
+          },
+        };
+      }
+    }
+  }
+
   // 3. Layered probability model for normal messages
   const botEnergy = globalEnergyModel.getEnergy();
   const { activity: groupActivity, messagesInWindow } = getGroupActivity(groupKey);
@@ -88,42 +128,45 @@ export function plan(event: ChatEvent, memberStats?: MemberStatsStore): PlanResu
   const urgencyScore =
     memberKey && memberStats ? memberStats.getUrgencyScore(memberKey, spamType) : 0;
 
-  // Layer 1: Base interest from content (30% weight)
-  const baseInterest = calculateBaseInterest(text);
+  // Layer 1: Base interest from content (25% weight, lowered from 30%)
+  const baseInterest = calculateBaseInterest(text) * 0.6; // Further reduced to 60%
 
-  // Layer 2: Social attention - user expectation (40% weight)
+  // Layer 2: Social attention - user expectation (30% weight, lowered from 40%)
   // Combines intimacy with implicit mentions (e.g., "bot你觉得呢")
-  const socialAttention = clamp01(0.6 * intimacy + 0.4 * (event.mentionsBot ? 1 : 0));
+  const socialAttention = clamp01((0.5 * intimacy + 0.5 * (event.mentionsBot ? 1 : 0)) * 0.7); // 30% weight, 70% of original value
 
-  // Layer 3: Persona talkativeness (20% weight) - from persona config
+  // Layer 3: Persona talkativeness (15% weight, lowered from 20%)
   // TODO: get from persona.talkativeness, default 0.5
-  const personaTalkativeness = 0.5;
+  const personaTalkativeness = 0.35; // Reduced from 0.5
 
-  // Layer 4: Bot energy (10% weight)
+  // Layer 4: Bot energy (25% weight, significantly increased from 10%)
   const energyFactor = botEnergy;
 
-  // Combined probability
+  // Combined probability (lowered overall)
   let p =
-    0.3 * baseInterest + 0.4 * socialAttention + 0.2 * personaTalkativeness + 0.1 * energyFactor;
+    0.2 * baseInterest + 0.25 * socialAttention + 0.1 * personaTalkativeness + 0.25 * energyFactor;
 
-  // Negative modifiers (spam/noise dampening)
-  if (groupActivity > 0.8) {
-    p *= 0.5; // very noisy group → cut probability in half
+  // Negative modifiers (spam/noise dampening) - more aggressive
+  if (groupActivity > 0.7) {
+    // Lowered threshold from 0.8
+    p *= 0.3; // More aggressive cut from 0.5
+  } else if (groupActivity > 0.5) {
+    p *= 0.5; // Medium activity also reduces
   }
 
   // Spam type modifiers (replace simple userMessageRate penalty)
   switch (spamType) {
     case SpamType.HELP_SEEKING:
-      p *= 1.3; // User is urgently seeking help → increase priority
+      p *= 1.2; // Lowered from 1.3 - user is seeking help but less aggressive
       if (urgencyScore > 0.65) {
-        p = Math.max(p, 0.7); // High urgency → ensure response even if cold persona
+        p = Math.max(p, 0.5); // Lowered from 0.7 - less guaranteed response
       }
       break;
     case SpamType.MEME_PLAY:
-      p *= 0.8; // User playing memes → optional response
+      p *= 0.6; // Lowered from 0.8 - less likely to join memes
       break;
     case SpamType.NOISE:
-      p *= 0.4; // Meaningless spam → suppress heavily
+      p *= 0.2; // Lowered from 0.4 - heavily suppress noise
       break;
     case SpamType.NORMAL:
       // No modifier for normal messaging
@@ -132,12 +175,12 @@ export function plan(event: ChatEvent, memberStats?: MemberStatsStore): PlanResu
 
   // Only apply repetition penalty for meaningless repetition
   if (userRepetitionScore > 0.5 && spamType !== SpamType.HELP_SEEKING) {
-    p *= 0.7; // user repeating themselves (non-urgent) → reduce engagement
+    p *= 0.5; // Increased penalty from 0.7 - more suppression on repetition
   }
 
-  // Positive modifiers
+  // Positive modifiers (more conservative)
   if (groupMemeScore > 0.4) {
-    p += 0.1; // group meme in progress → join in
+    p += 0.05; // Lowered from 0.1 - less likely to join group memes
   }
 
   p = clamp01(p);
@@ -303,6 +346,14 @@ function estimateInterestScore(text: string): number {
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
+}
+
+function isQuestion(text: string): boolean {
+  return /[?？]+/.test(text);
+}
+
+function hasStrongEmotion(text: string): boolean {
+  return /(😭|😢|T_T|QAQ|生气|发火|怒|操|妈的|傻|滚|草泥马|气死|怒了)/i.test(text);
 }
 
 function buildDebugReason(

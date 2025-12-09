@@ -21,6 +21,7 @@ const logger = createLogger(config);
  */
 export interface ReplyContext {
   recentTurns: ChatTurn[]; // 给 LLM 用的原始上下文（3-6条）
+  targetTurn?: ChatTurn; // 合并短窗口后选中的目标消息
   topicSummary?: string; // "他们刚刚在讨论…" 这样的短句
   meta: {
     sinceLastBotMs: number; // 距离上次 bot 回复的时间
@@ -39,35 +40,46 @@ export class ContextBuilder {
     const key = `${event.platform}:${event.groupId}`;
     const now = event.timestamp ?? Date.now();
 
-    // 1) 找到上一次 bot 说话的时间
-    // 注意：recent 包含了当前消息，需要排除
+    // 1) 获取所有最近的消息（包含当前消息）
     const allRecent = this.conversationStore.getRecentTurns(key, 40);
-    const recent = allRecent.slice(0, -1); // 排除最后一条（当前消息）
 
-    const lastBotIndex = [...recent].reverse().findIndex((t) => t.role === 'bot');
-    const lastBotTurn = lastBotIndex === -1 ? undefined : recent[recent.length - 1 - lastBotIndex];
+    // 2) 找到最后一次 bot 回复的位置（在所有消息中，包括当前消息）
+    const lastBotIndex = [...allRecent].reverse().findIndex((t) => t.role === 'bot');
+    const lastBotTurn =
+      lastBotIndex === -1 ? undefined : allRecent[allRecent.length - 1 - lastBotIndex];
 
     const sinceLastBotMs = lastBotTurn ? now - lastBotTurn.timestamp : Infinity;
 
-    // 2) 决定"这一轮上下文"的候选区间
+    // 3) 决定"这一轮上下文"的候选区间
     let candidate: ChatTurn[];
     if (sinceLastBotMs < 2 * 60 * 1000) {
-      // 2 分钟内，按"这一轮对话"来取（从上次 bot 回复到现在）
+      // 2 分钟内，按"这一轮对话"来取（从上次 bot 回复到现在，包括当前消息）
       const lastBotTs = lastBotTurn!.timestamp;
-      candidate = recent.filter((t) => t.timestamp >= lastBotTs);
+      candidate = allRecent.filter((t) => t.timestamp >= lastBotTs);
     } else {
-      // 很久没说话了，只取最近几条
-      candidate = recent.slice(-6);
+      // 很久没说话了，只取最近几条（包括当前消息）
+      candidate = allRecent.slice(-6);
     }
 
-    // 3) 从候选里再抽 3～6 条给 LLM
+    // 4) 合并同一人 5 秒内的连续发言，选最后一句为 target，其他保留为上下文
+    let targetTurn: ChatTurn | undefined = candidate[candidate.length - 1];
+    let runStart = candidate.length - 1;
+    while (
+      runStart - 1 >= 0 &&
+      candidate[runStart - 1].userId === targetTurn.userId &&
+      targetTurn.timestamp - candidate[runStart - 1].timestamp <= 5000
+    ) {
+      runStart -= 1;
+    }
+
     const recentTurns = this.pickForLLM(candidate);
 
-    // 4) 做一个很短的 topicSummary（可选，先简单写死规则）
+    // 5) 做一个很短的 topicSummary（可选，先简单写死规则）
     const topicSummary = this.buildTopicSummary(recentTurns);
 
     return {
       recentTurns,
+      targetTurn,
       topicSummary,
       meta: {
         sinceLastBotMs,

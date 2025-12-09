@@ -38,6 +38,17 @@ export class LlmReplyGenerator {
         'replyer',
         `Generated reply (${duration}ms, ${response.length} chars): "${response.length > 40 ? response.substring(0, 40) + '...' : response}"`,
       );
+
+      // 处理 <brk> 分隔符：如果包含 <brk>，则转换为分条发送（最多3条）
+      if (response.includes('<brk>')) {
+        const lines = response
+          .split('<brk>')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        // 最多3条
+        return lines.slice(0, 3).join('<brk>');
+      }
+
       return response;
     } catch (error) {
       const duration = Date.now() - startTime;

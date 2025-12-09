@@ -14,8 +14,8 @@ export interface EnergyState {
 
 export class EnergyModel {
   private state: EnergyState = { value: 1, lastUpdate: Date.now() };
-  private recoveryPerMinute = 0.02; // recover 0.02 per minute
-  private costPerReply = 0.05; // spend per reply
+  private recoveryPerMinute = 0.02; // recover 0.02 per minute 
+  private costPerReply = 0.10; // spend 0.10 per reply 
 
   private tick(): void {
     const now = Date.now();

@@ -44,6 +44,10 @@ export interface PlanResult {
     spamType?: string; // Spam classification: help_seeking/meme_play/noise/normal
     urgencyScore?: number; // Urgency for help-seeking spam (0-1)
     reason?: string;
+    // Cooldown factors
+    sinceLastBotMs?: number; // Time since last bot reply
+    cooldownMs?: number; // Cooldown threshold
+    skipProb?: number; // Probability of skipping in soft window
   };
 
   /** Optional high-level reason string for debug output */

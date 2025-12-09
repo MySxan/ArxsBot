@@ -40,10 +40,20 @@ const OB11MessageSchema = z.object({
   post_type: z.literal('message'),
   message_type: z.enum(['group', 'private']),
   message: z.array(
-    z.object({
-      type: z.literal('text'),
-      data: z.object({ text: z.string().max(2000) }),
-    }),
+    z.union([
+      z.object({
+        type: z.literal('text'),
+        data: z.object({ text: z.string().max(2000) }),
+      }),
+      z.object({
+        type: z.literal('at'),
+        data: z.object({ qq: z.string() }),
+      }),
+      z.object({
+        type: z.string(),
+        data: z.record(z.unknown()),
+      }),
+    ]),
   ),
   user_id: z.number(),
   group_id: z.number().optional(),
@@ -81,10 +91,31 @@ export function mapToChatEvent(
   }
 
   // Extract plain text
-  const rawText = msg.message.map((seg) => seg.data.text ?? '').join('');
+  const rawText = msg.message
+    .map((seg) => {
+      if (seg.type === 'text' && typeof seg.data.text === 'string') {
+        return seg.data.text;
+      }
+      return '';
+    })
+    .join('');
 
-  // Check if bot is mentioned (basic check - can be enhanced)
-  const mentionsBot = rawText.includes('@') || rawText.includes('bot');
+  // Check if bot is mentioned by checking if any 'at' segment targets the bot itself
+  const mentionsBot = msg.message.some((seg) => {
+    if (seg.type === 'at' && typeof seg.data.qq === 'string') {
+      // At消息格式：qq字段包含被@的QQ号
+      // 检查是否@的是bot自己
+      const atQQ = String(seg.data.qq);
+      const botQQ = String(msg.self_id);
+      const matches = atQQ === botQQ;
+      logger?.debug(
+        'qq-mapper',
+        `At segment detected: qq=${atQQ}, botId=${botQQ}, matches=${matches}`,
+      );
+      return matches;
+    }
+    return false;
+  });
 
   const chatEvent: ChatEvent = {
     platform: 'qq',

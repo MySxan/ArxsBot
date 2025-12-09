@@ -16,8 +16,9 @@ adapters:
 # LLM configuration (for chat replies)
 llm:
   enabled: true # LLM enabled with DeepSeek
-  baseUrl: https://api.deepseek.com/v1 # DeepSeek API (cheaper, better for Chinese)
+  baseUrl: https://api.deepseek.com/v1 
   apiKey: # Set via LLM_API_KEY env var
-  model: deepseek-chat # DeepSeek's chat model
-  temperature: 1.3
-  maxTokens: 2000
+  model: deepseek-reasoner 
+  temperature: 1
+  maxTokens: 16000
+  thinkingBudget: 5000 

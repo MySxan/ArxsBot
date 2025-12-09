@@ -36,4 +36,7 @@ export interface LLMConfig {
 
   /** Max tokens to generate */
   maxTokens?: number;
+
+  /** Thinking budget for DeepSeek Reasoner (max tokens for thinking process) */
+  thinkingBudget?: number;
 }

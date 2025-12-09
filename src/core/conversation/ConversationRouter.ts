@@ -19,6 +19,20 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Calculate typing delay based on character count and randomness
+ * Formula: baseTime + (charCount * timePerChar) + randomFactor
+ * Simulates human typing: ~50-100ms per character, plus random variation
+ */
+function calculateTypingDelay(text: string): number {
+  const baseTime = 500; // 基础延迟（收到消息后等待时间）
+  const timePerChar = 40; // 每个字符平均打字时间（ms）
+  const randomFactor = Math.random() * 800; // 随机因素（0-800ms）
+  const charCount = text.length;
+
+  return baseTime + charCount * timePerChar + randomFactor;
+}
+
+/**
  * Main event router - handles all incoming chat events.
  * Flow: Event → Planner → Command/Chat handler → Response
  */
@@ -233,20 +247,24 @@ export class ConversationRouter {
             })();
 
             // 3. 怎么喂：生成 System Prompt + LLM Messages
-            // System Prompt 包含：角色设定 + 固定约束 + 动态风格 + 话题摘要
-            const systemMsg = promptBuilder.build(currentPersona, dynamicStyle, replyContext);
+            // System Prompt 现在只包含：角色设定 + 固定约束
+            const systemMsg = promptBuilder.buildSystem(currentPersona);
 
-            // 构建完整的 LLM Messages（包含智能选择的上下文）
+            // 构建完整的 LLM Messages（包含动态风格、记忆、上下文等）
             const llmMessages = promptBuilder.buildMessages(
               systemMsg,
               replyContext,
+              dynamicStyle,
+              undefined, // longTermMemory - 暂时为空，未来可接入
               event.userName || event.userId,
               event.rawText,
             );
 
             // 记录完整 prompt（用于 /prompts 指令查看）
             this.llmPromptHistory.push(
-              llmMessages.map((m) => `[${m.role}] ${m.content}`).join('\n\n'),
+              llmMessages
+                .map((m) => m.content) // 保留所有内容，只去掉 role 标签
+                .join('\n\n'),
             );
 
             // 生成回复
@@ -296,12 +314,36 @@ export class ConversationRouter {
               isAtReply: event.mentionsBot || false,
             });
 
-            // Step 5: Send segments with planned delays
-            for (const segment of utterancePlan.segments) {
-              if (segment.delayMs > 0) {
-                await sleep(segment.delayMs);
+            // Step 5: Calculate typing delay before sending
+            const typingDelay = calculateTypingDelay(replyText);
+            this.logger.debug(
+              'router',
+              `Typing delay: ${typingDelay.toFixed(0)}ms (${replyText.length} chars)`,
+            );
+            await sleep(typingDelay);
+
+            // Step 6: Send segments with planned delays
+            // 检查是否包含 <brk> 分隔符（多条消息）
+            if (replyText.includes('<brk>')) {
+              const segments = replyText
+                .split('<brk>')
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0);
+              for (let i = 0; i < segments.length; i += 1) {
+                if (i > 0) {
+                  // 分条消息间隔 500~1200ms
+                  await sleep(500 + Math.random() * 700);
+                }
+                await this.sender.sendText(event.groupId, segments[i]);
               }
-              await this.sender.sendText(event.groupId, segment.text);
+            } else {
+              // 单条消息：使用 utterancePlan 来处理分句
+              for (const segment of utterancePlan.segments) {
+                if (segment.delayMs > 0) {
+                  await sleep(segment.delayMs);
+                }
+                await this.sender.sendText(event.groupId, segment.text);
+              }
             }
 
             // Update bot energy after sending a reply

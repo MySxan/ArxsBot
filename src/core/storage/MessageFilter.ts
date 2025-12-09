@@ -108,8 +108,8 @@ export class MessageFilter {
       tags.push('emotion');
     }
 
-    // 6. bot.related - @机器人
-    if (text.includes('@') || /(bot|机器人|助手|arxs|小助手)/.test(text.toLowerCase())) {
+    // 6. bot.related - 真实@事件（@bot自己）
+    if (message.mentionsBot) {
       tags.push('bot.related');
     }
 

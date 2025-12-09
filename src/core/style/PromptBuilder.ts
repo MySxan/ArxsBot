@@ -33,54 +33,28 @@ export interface LongTermMemory {
 
 export class PromptBuilder {
   /**
-   * 构建固定语言约束（写死，不随场景变化）
+   * 构建固定语言约束（压缩版）
    */
   private buildLanguageConstraints(personaConstraints?: string): string {
-    const baseConstraints = [
-      `# 语言约束`,
-      `- 禁止AI腔：不能说"作为一个AI"、"我理解你的感受"、"根据你的描述"`,
-      `- 禁止讲大道理、不能说教`,
-      `- 禁止格式化：不分点列举、不用括号动作描写`,
-      `- 必须单句回复：不换行、不分段`,
-    ];
-
+    const lines = ['语言约束：禁止AI腔/讲大道理/格式化/分点/括号动作'];
     if (personaConstraints) {
-      baseConstraints.push(`- 角色约束：${personaConstraints}`);
+      lines.push(`角色约束：${personaConstraints}`);
     }
-
-    return baseConstraints.join('\n');
+    return lines.join('\n');
   }
 
   /**
-   * 构建动态风格提示（根据 Planner 参数生成）
+   * 构建动态风格提示（紧凑标签格式）
    */
   private buildDynamicStylePrompt(params: DynamicStyleParams): string {
-    const parts: string[] = [];
+    const tags: string[] = [];
 
-    // 语气修饰
-    if (params.toneMod === 'lazy') parts.push('语气敷衍随意');
-    else if (params.toneMod === 'teasing') parts.push('带点坏笑调侃');
-    else if (params.toneMod === 'serious') parts.push('认真一点');
-    else if (params.toneMod === 'cold') parts.push('冷淡简短');
+    if (params.toneMod) tags.push(`tone=${params.toneMod}`); // lazy / teasing / serious / cold
+    if (params.slangLevel != null) tags.push(`slang=${params.slangLevel.toFixed(2)}`);
+    if (params.intimacyLevel != null) tags.push(`intimacy=${params.intimacyLevel.toFixed(2)}`);
 
-    // 长度限制
-    if (params.maxLength) parts.push(`不超过${params.maxLength}字`);
-
-    // 网络用语程度
-    if (params.slangLevel && params.slangLevel > 0.5) {
-      parts.push('多用网络梗和口语');
-    } else if (params.slangLevel && params.slangLevel < 0.3) {
-      parts.push('少用网络梗');
-    }
-
-    // 亲密度影响
-    if (params.intimacyLevel && params.intimacyLevel > 0.7) {
-      parts.push('可以随意调侃');
-    } else if (params.intimacyLevel && params.intimacyLevel < 0.3) {
-      parts.push('保持礼貌距离');
-    }
-
-    return parts.length > 0 ? `\n# 当前风格\n${parts.join('，')}` : '';
+    // 输出类似: [STYLE] tone=lazy;slang=0.8;intimacy=0.9
+    return tags.length ? `[STYLE] ${tags.join(';')}` : '';
   }
 
   /**
@@ -88,35 +62,51 @@ export class PromptBuilder {
    */
   private buildPersonaPrompt(persona: Persona): string {
     return [
-      `# 角色设定`,
       `你是 ${persona.name}，${persona.description}`,
-      ``,
-      `# 基础说话风格`,
+      `\n`,
+      `人设风格：`,
       persona.tone,
-    ].join('\n');
+    ].join();
   }
 
   /**
-   * 构建长期记忆摘要
+   * 构建长期记忆摘要（压缩标签格式）
    */
   private buildLongTermMemory(memory?: LongTermMemory): string {
     if (!memory) return '';
 
-    const parts: string[] = [];
-    if (memory.relationship) parts.push(`关系：${memory.relationship}`);
+    const facts: string[] = [];
+    if (memory.relationship) facts.push(`rel=${memory.relationship}`);
     if (memory.userPreferences?.length) {
-      parts.push(`偏好：${memory.userPreferences.join('、')}`);
+      facts.push(`likes=${memory.userPreferences.join('/')}`);
     }
     if (memory.pastFacts?.length) {
-      parts.push(`记得：${memory.pastFacts.join('；')}`);
+      facts.push(`facts=${memory.pastFacts.join('；')}`);
     }
 
-    return parts.length > 0 ? `\n# 长期记忆\n${parts.join('\n')}` : '';
+    return facts.length > 0 ? `[MEMORY] ${facts.join(';')}` : '';
   }
 
   /**
-   * 组合完整 System Prompt（标准顺序）
-   * 注意：不再包含即时上下文，上下文由 buildMessages() 单独处理
+   * 构建基础 System Prompt（仅人格 + 语言约束，清理格式）
+   */
+  buildSystem(persona: Persona): string {
+    const lines = [
+      `你是 ${persona.name}${persona.description ? '，' + persona.description : ''}`,
+      `人设风格：${persona.tone}`,
+      `语言约束：禁止AI腔、讲大道理、格式化、分点、括号动作`,
+    ];
+
+    // 只在 persona 有额外约束时才添加
+    if (persona.constraints) {
+      lines.push(`角色约束：${persona.constraints}`);
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * @deprecated 使用 buildSystem() 代替。动态内容现在放在 user message 中。
    */
   build(
     persona: Persona,
@@ -124,49 +114,113 @@ export class PromptBuilder {
     replyContext?: ReplyContext,
     longTermMemory?: LongTermMemory,
   ): string {
-    const parts = [
-      this.buildPersonaPrompt(persona),
-      this.buildLanguageConstraints(persona.constraints),
-      this.buildDynamicStylePrompt(dynamicStyle),
-    ];
-
-    // 添加话题摘要（如果有）
-    if (replyContext?.topicSummary) {
-      parts.push(`\n# 最近对话情况\n${replyContext.topicSummary}`);
-    }
-
-    // 添加长期记忆（如果有）
-    if (longTermMemory) {
-      parts.push(this.buildLongTermMemory(longTermMemory));
-    }
-
-    return parts.filter(Boolean).join('\n');
+    logger.warn('prompt', 'build() is deprecated, use buildSystem() instead');
+    return this.buildSystem(persona);
   }
 
   /**
-   * 构建完整的 LLM Messages 数组（包含 system + history + current user message）
-  /**
-   * 构建完整的 LLM Messages 数组（包含 system + history + current user message）
-   * 这里是"怎么喂"：上下文在 prompt 里长什么样
+   * 构建完整的 LLM Messages 数组
+   * 结构：[STYLE] + [SUMMARY] + [MEMORY] + [CONTEXT] + [TARGET] + [INSTRUCTION]
    */
   buildMessages(
     systemPrompt: string,
     replyContext: ReplyContext,
+    dynamicStyle: DynamicStyleParams,
+    longTermMemory: LongTermMemory | undefined,
     currentUserName: string,
     currentUserMessage: string,
   ): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+    const targetName = replyContext.targetTurn?.userName || currentUserName;
+    const targetMessage = replyContext.targetTurn?.content || currentUserMessage;
+    const allTurns = replyContext.recentTurns;
+
+    // 找到最后一次 bot 回复的位置
+    let lastBotIndex = -1;
+    for (let i = allTurns.length - 1; i >= 0; i -= 1) {
+      if (allTurns[i].role === 'bot') {
+        lastBotIndex = i;
+        break;
+      }
+    }
+
+    // 1) 构建上下文 [HISTORICAL]/[NEW_WINDOW]
+    const contextLines: string[] = [];
+
+    if (lastBotIndex === -1) {
+      // 没有bot说过话，全部消息都是 NEW_WINDOW
+      contextLines.push('[NEW_WINDOW]');
+      for (const turn of allTurns) {
+        const name = turn.role === 'bot' ? '你' : turn.userName || turn.userId || '某人';
+        contextLines.push(`${name}: ${turn.content}`);
+      }
+    } else {
+      // 有bot说过话，分两个区间
+      const historicalStartIndex = Math.max(0, lastBotIndex - 5);
+
+      // [HISTORICAL] 区间：turns[max(0, lastBotIndex - 5) ... lastBotIndex]（包括bot回复本身）
+      contextLines.push('[HISTORICAL]');
+      for (let i = historicalStartIndex; i <= lastBotIndex; i += 1) {
+        const turn = allTurns[i];
+        const name = turn.role === 'bot' ? '你' : turn.userName || turn.userId || '某人';
+        contextLines.push(`${name}: ${turn.content}`);
+      }
+
+      // [NEW_WINDOW] 区间：turns[lastBotIndex + 1 ... end]（之后的消息）
+      if (lastBotIndex + 1 < allTurns.length) {
+        contextLines.push('[NEW_WINDOW]');
+        for (let i = lastBotIndex + 1; i < allTurns.length; i += 1) {
+          const turn = allTurns[i];
+          const name = turn.role === 'bot' ? '你' : turn.userName || turn.userId || '某人';
+          contextLines.push(`${name}: ${turn.content}`);
+        }
+      }
+    }
+
+    const contextBlock = contextLines.join('\n');
+
+    // 2) [TARGET]
+    const targetBlock = `[TARGET]\n${targetName || '对方'}: ${targetMessage}`;
+
+    // 3) 组合所有部分
+    const sections: string[] = [];
+
+    // 动态风格
+    const styleLine = this.buildDynamicStylePrompt(dynamicStyle);
+    if (styleLine) sections.push(styleLine);
+
+    // 话题摘要
+    if (replyContext.topicSummary) {
+      sections.push(`[SUMMARY] ${replyContext.topicSummary}`);
+    }
+
+    // 长期记忆
+    const memoryLine = this.buildLongTermMemory(longTermMemory);
+    if (memoryLine) sections.push(memoryLine);
+
+    // 上下文（有内容才加，无历史时不加标签）
+    if (contextBlock) {
+      sections.push(contextBlock);
+    }
+
+    // 目标消息
+    sections.push(targetBlock);
+
+    // 明确指令（最前）
+    sections.unshift(
+      `[INSTRUCTION]
+- 只针对 [TARGET] 生成回复
+- 可以参考 [HISTORICAL] 和 [NEW_WINDOW] 理解背景，其中的昵称只应用于识别用户身份
+- 优先遵守 [STYLE] 中的风格
+- 如果多条 [NEW_WINDOW] 是连续话题，可以在一条回复里同时回应多个点，不必一句对一句
+- 如果觉得这一轮适合分成多条消息发，可以用 <brk> 作为分条分隔符（最多3条）
+- 只输出要发到群里的内容`,
+    );
+
+    const fullUserMessage = sections.join('\n\n');
+
     return [
       { role: 'system', content: systemPrompt },
-      // 上下文部分：使用智能选择的 recentTurns
-      ...replyContext.recentTurns.map((turn) => ({
-        role: turn.role === 'user' ? ('user' as const) : ('assistant' as const),
-        content:
-          turn.role === 'user'
-            ? `【${turn.userName || turn.userId || '群友'}】${turn.content}`
-            : turn.content,
-      })),
-      // 当前这条
-      { role: 'user', content: `【${currentUserName}】${currentUserMessage}` },
+      { role: 'user', content: fullUserMessage },
     ];
   }
 }
