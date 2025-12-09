@@ -7,10 +7,9 @@ import type { Logger } from '../../infra/logger/logger.js';
 export class OpenAICompatibleClient implements LLMClient {
   private baseUrl: string;
   private apiKey: string;
-  private model: string;
-  private temperature: number;
-  private maxTokens: number;
-  private thinkingBudget?: number;
+  private currentConfig: import('./types.js').ModelConfig;
+  private defaultConfig: import('./types.js').ModelConfig;
+  private nyaConfig?: import('./types.js').ModelConfig;
   private isReasonerModel: boolean;
 
   constructor(
@@ -19,38 +18,59 @@ export class OpenAICompatibleClient implements LLMClient {
   ) {
     this.baseUrl = config.baseUrl;
     this.apiKey = config.apiKey;
-    this.model = config.model;
-    this.temperature = config.temperature ?? 1;
-    this.maxTokens = config.maxTokens ?? 2000;
-    this.thinkingBudget = config.thinkingBudget;
-    this.isReasonerModel = this.model.includes('reasoner');
+    this.defaultConfig = config.default;
+    this.nyaConfig = config.nya;
+    this.currentConfig = this.defaultConfig;
+    this.isReasonerModel = this.currentConfig.model.includes('reasoner');
 
     this.logger.info(
       'llm-client',
-      `Initialized ${this.model} at ${this.baseUrl}${this.isReasonerModel ? ' (with thinking mode)' : ''}`,
+      `Initialized ${this.currentConfig.model} at ${this.baseUrl}${this.isReasonerModel ? ' (with thinking mode)' : ''}`,
     );
+  }
+
+  /**
+   * Switch to nya persona model
+   */
+  switchToNya(): void {
+    if (this.nyaConfig) {
+      this.currentConfig = this.nyaConfig;
+      this.isReasonerModel = this.currentConfig.model.includes('reasoner');
+      this.logger.info('llm-client', `Switched to nya model: ${this.currentConfig.model}`);
+    } else {
+      this.logger.warn('llm-client', 'Nya model config not found, using default');
+    }
+  }
+
+  /**
+   * Switch to default persona model
+   */
+  switchToDefault(): void {
+    this.currentConfig = this.defaultConfig;
+    this.isReasonerModel = this.currentConfig.model.includes('reasoner');
+    this.logger.info('llm-client', `Switched to default model: ${this.currentConfig.model}`);
   }
 
   async chat(messages: LLMMessage[]): Promise<string> {
     const startTime = Date.now();
     this.logger.debug(
       'llm-client',
-      `Chat request: ${messages.length} messages, model=${this.model}, temp=${this.temperature}`,
+      `Chat request: ${messages.length} messages, model=${this.currentConfig.model}, temp=${this.currentConfig.temperature ?? 1}`,
     );
 
     try {
       const requestBody: any = {
-        model: this.model,
+        model: this.currentConfig.model,
         messages,
-        temperature: this.temperature,
-        max_tokens: this.maxTokens,
+        temperature: this.currentConfig.temperature ?? 1,
+        max_tokens: this.currentConfig.maxTokens ?? 2000,
       };
 
       // Add thinking budget for DeepSeek Reasoner model
-      if (this.isReasonerModel && this.thinkingBudget) {
+      if (this.isReasonerModel && this.currentConfig.thinkingBudget) {
         requestBody.thinking = {
           type: 'enabled',
-          budget_tokens: this.thinkingBudget,
+          budget_tokens: this.currentConfig.thinkingBudget,
         };
       }
 

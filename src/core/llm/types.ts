@@ -19,15 +19,9 @@ export interface LLMClient {
 }
 
 /**
- * LLM configuration
+ * Model configuration for a specific persona
  */
-export interface LLMConfig {
-  /** API base URL */
-  baseUrl: string;
-
-  /** API key */
-  apiKey: string;
-
+export interface ModelConfig {
   /** Model name */
   model: string;
 
@@ -39,4 +33,21 @@ export interface LLMConfig {
 
   /** Thinking budget for DeepSeek Reasoner (max tokens for thinking process) */
   thinkingBudget?: number;
+}
+
+/**
+ * LLM configuration
+ */
+export interface LLMConfig {
+  /** API base URL */
+  baseUrl: string;
+
+  /** API key */
+  apiKey: string;
+
+  /** Default model configuration */
+  default: ModelConfig;
+
+  /** Model configuration for nya persona (optional) */
+  nya?: ModelConfig;
 }

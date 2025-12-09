@@ -26,16 +26,64 @@ export type AppConfig = {
     enabled?: boolean;
     baseUrl?: string;
     apiKey?: string;
-    model?: string;
-    temperature?: number;
-    maxTokens?: number;
+    default?: {
+      model?: string;
+      temperature?: number;
+      maxTokens?: number;
+      thinkingBudget?: number;
+    };
+    nya?: {
+      model?: string;
+      temperature?: number;
+      maxTokens?: number;
+      thinkingBudget?: number;
+    };
   };
 };
 
-let cachedConfig: AppConfig | null = null;
+export type AppConfigRequired = {
+  app: {
+    name: string;
+    env: 'dev' | 'prod' | 'test';
+  };
+  logger: {
+    level: 'debug' | 'info' | 'warn' | 'error';
+    transport: 'console';
+  };
+  logging: {
+    color: boolean;
+    level: 'debug' | 'info' | 'warn' | 'error';
+  };
+  adapters: {
+    qq: {
+      enabled: boolean;
+      wsPort: number;
+      token?: string;
+    };
+  };
+  llm: {
+    enabled: boolean;
+    baseUrl: string;
+    apiKey?: string;
+    default: {
+      model: string;
+      temperature: number;
+      maxTokens: number;
+      thinkingBudget?: number;
+    };
+    nya?: {
+      model: string;
+      temperature: number;
+      maxTokens: number;
+      thinkingBudget?: number;
+    };
+  };
+};
 
-export function loadConfig(): AppConfig {
-  if (cachedConfig) return cachedConfig;
+let cachedConfig: AppConfigRequired | null = null;
+
+export function loadConfig(): AppConfigRequired {
+  if (cachedConfig) return cachedConfig as AppConfigRequired;
   const filePath = resolve(process.cwd(), 'config', 'default.yaml');
   const raw = readFileSync(filePath, 'utf-8');
   const cfg = parse(raw) as Partial<AppConfig>;
@@ -66,9 +114,20 @@ export function loadConfig(): AppConfig {
       enabled: cfg?.llm?.enabled ?? false,
       baseUrl: cfg?.llm?.baseUrl ?? process.env.LLM_BASE_URL ?? 'https://api.deepseek.com/v1',
       apiKey: cfg?.llm?.apiKey ?? process.env.LLM_API_KEY,
-      model: cfg?.llm?.model ?? process.env.LLM_MODEL ?? 'deepseek-chat',
-      temperature: cfg?.llm?.temperature ?? 1,
-      maxTokens: cfg?.llm?.maxTokens ?? 2000,
+      default: {
+        model: cfg?.llm?.default?.model ?? process.env.LLM_MODEL ?? 'deepseek-reasoner',
+        temperature: cfg?.llm?.default?.temperature ?? 1,
+        maxTokens: cfg?.llm?.default?.maxTokens ?? 16000,
+        thinkingBudget: cfg?.llm?.default?.thinkingBudget ?? 5000,
+      },
+      nya: cfg?.llm?.nya
+        ? {
+            model: cfg.llm.nya.model ?? 'deepseek-chat',
+            temperature: cfg.llm.nya.temperature ?? 1.2,
+            maxTokens: cfg.llm.nya.maxTokens ?? 8000,
+            thinkingBudget: cfg.llm.nya.thinkingBudget,
+          }
+        : undefined,
     },
   };
 
@@ -86,4 +145,4 @@ export function loadConfig(): AppConfig {
 
 // console.log(loadConfig());
 
-export const config: AppConfig = loadConfig();
+export const config: AppConfigRequired = loadConfig();

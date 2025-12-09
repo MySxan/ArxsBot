@@ -7,3 +7,4 @@ export { DebugCommand } from './debug.js';
 export { ContextCommand } from './context.js';
 
 export { PromptsCommand } from './prompts.js';
+export { NyaCommand } from './nya.js';

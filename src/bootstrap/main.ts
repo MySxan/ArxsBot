@@ -10,7 +10,7 @@ import {
   NyaCommand,
 } from '../core/command/builtin/index.js';
 import { OpenAICompatibleClient } from '../core/llm/OpenAIClient.js';
-import { LlmReplyGenerator } from '../core/chat/LlmReplyGenerator.js';
+import { SimpleReplyer } from '../core/chat/SimpleReplyer.js';
 import { InMemoryConversationStore } from '../core/memory/ConversationStore.js';
 import { MemberStatsStore } from '../core/memory/MemberStatsStore.js';
 import { QQAdapter } from '../adapter/qq/QQAdapter.js';
@@ -61,7 +61,7 @@ export async function start() {
   (router as any).commandRouter = commandRouter;
 
   // Initialize LLM client and replyer if enabled
-  let replyer: LlmReplyGenerator | undefined;
+  let replyer: SimpleReplyer | undefined;
   if (cfg.llm?.enabled && cfg.llm.apiKey) {
     logger.info('bootstrap', `Initializing LLM (${cfg.llm.default.model})...`);
     const llmClient = new OpenAICompatibleClient(logger, {
@@ -70,7 +70,7 @@ export async function start() {
       default: cfg.llm.default,
       nya: cfg.llm.nya,
     });
-    replyer = new LlmReplyGenerator(llmClient, logger, conversationStore);
+    replyer = new SimpleReplyer(llmClient, logger, conversationStore);
     (router as any).replyer = replyer;
   } else {
     logger.warn('bootstrap', 'LLM not configured - smalltalk will use simple echo fallback');

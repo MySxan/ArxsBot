@@ -213,7 +213,7 @@ export class PromptBuilder {
 - 优先遵守 [STYLE] 中的风格
 - 如果多条 [NEW_WINDOW] 是连续话题，可以在一条回复里同时回应多个点，不必一句对一句
 - 如果觉得这一轮适合分成多条消息发，可以用 <brk> 作为分条分隔符（最多3条）
-- 只输出要发到群里的内容`,
+- 只输出要发到群里的内容，不要换行/分段`,
     );
 
     const fullUserMessage = sections.join('\n\n');

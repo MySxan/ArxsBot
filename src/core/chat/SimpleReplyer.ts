@@ -10,7 +10,7 @@ import { DefaultPersona } from '../persona/PersonaTypes.js';
  * Maintains short-term conversation history per group to support multi-turn chat
  * Applies a consistent persona to shape the bot's personality
  */
-export class LlmReplyGenerator {
+export class SimpleReplyer {
   private persona: Persona;
   private historyLimit = 8; // Use last 8 turns for context
 
@@ -21,6 +21,24 @@ export class LlmReplyGenerator {
     persona?: Persona,
   ) {
     this.persona = persona || DefaultPersona;
+  }
+
+  /**
+   * Switch LLM model to nya mode
+   */
+  switchToNyaModel(): void {
+    if ('switchToNya' in this.llm && typeof this.llm.switchToNya === 'function') {
+      this.llm.switchToNya();
+    }
+  }
+
+  /**
+   * Switch LLM model to default mode
+   */
+  switchToDefaultModel(): void {
+    if ('switchToDefault' in this.llm && typeof this.llm.switchToDefault === 'function') {
+      this.llm.switchToDefault();
+    }
   }
 
   /**
@@ -38,17 +56,6 @@ export class LlmReplyGenerator {
         'replyer',
         `Generated reply (${duration}ms, ${response.length} chars): "${response.length > 40 ? response.substring(0, 40) + '...' : response}"`,
       );
-
-      // 处理 <brk> 分隔符：如果包含 <brk>，则转换为分条发送（最多3条）
-      if (response.includes('<brk>')) {
-        const lines = response
-          .split('<brk>')
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0);
-        // 最多3条
-        return lines.slice(0, 3).join('<brk>');
-      }
-
       return response;
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -133,24 +140,6 @@ export class LlmReplyGenerator {
   setPersona(persona: Persona): void {
     this.persona = persona;
     this.logger.debug('replyer', `Persona changed to: ${persona.name}`);
-  }
-
-  /**
-   * Switch LLM model to nya mode
-   */
-  switchToNyaModel(): void {
-    if ('switchToNya' in this.llm && typeof this.llm.switchToNya === 'function') {
-      this.llm.switchToNya();
-    }
-  }
-
-  /**
-   * Switch LLM model to default mode
-   */
-  switchToDefaultModel(): void {
-    if ('switchToDefault' in this.llm && typeof this.llm.switchToDefault === 'function') {
-      this.llm.switchToDefault();
-    }
   }
 
   // Future methods:

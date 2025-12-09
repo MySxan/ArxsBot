@@ -15,6 +15,7 @@ export const HelpCommand: CommandHandler = {
   /debug - 显示调试信息
   /context - 显示当前群的对话历史和成员统计
   /prompts - 查看上一次生成时使用的最终拼接prompts
+  /nya on/off - 切换猫娘模式
 
   提示：
   - 使用 @ 提及我来聊天
