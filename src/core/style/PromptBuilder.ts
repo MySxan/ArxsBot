@@ -1,6 +1,5 @@
 /**
- * PromptBuilder: 负责根据行为规划、个性、记忆等参数生成最终 System Prompt
- * 职责:组装固定约束 + 动态参数 → 结构化 System Prompt
+ * @file PromptBuilder 类用于构建对话中的各种提示和约束
  */
 import type { Persona } from '../persona/PersonaTypes.js';
 import type { PlanResult } from '../planner/types.js';
@@ -12,14 +11,14 @@ import { createLogger } from '../../infra/logger/logger.js';
 const logger = createLogger(config);
 
 /**
- * 动态风格参数（由 BehaviorPlanner 提供）
+ * 动态风格参数（BehaviorPlanner）
  */
 export interface DynamicStyleParams {
   toneMod?: 'casual' | 'teasing' | 'serious' | 'lazy' | 'cold'; // 语气修饰
   maxLength?: number; // 回复长度上限
   slangLevel?: number; // 网络用语程度 0-1
-  intimacyLevel?: number; // 亲密度 0-1（影响是否可以调侃）
-  energyLevel?: number; // 精力水平 0-1（影响回复积极性）
+  intimacyLevel?: number; // 亲密度 0-1
+  energyLevel?: number; // 精力水平 0-1
 }
 
 /**
@@ -33,7 +32,7 @@ export interface LongTermMemory {
 
 export class PromptBuilder {
   /**
-   * 构建固定语言约束（压缩版）
+   * 构建固定语言约束
    */
   private buildLanguageConstraints(personaConstraints?: string): string {
     const lines = ['语言约束：禁止AI腔/讲大道理/格式化/分点/括号动作'];
@@ -44,17 +43,14 @@ export class PromptBuilder {
   }
 
   /**
-   * 构建动态风格提示（紧凑标签格式）
+   * 构建动态风格提示
    */
   private buildDynamicStylePrompt(params: DynamicStyleParams): string {
     const tags: string[] = [];
-
-    if (params.toneMod) tags.push(`tone=${params.toneMod}`); // lazy / teasing / serious / cold
+    if (params.toneMod) tags.push(`tone=${params.toneMod}`);
     if (params.slangLevel != null) tags.push(`slang=${params.slangLevel.toFixed(2)}`);
     if (params.intimacyLevel != null) tags.push(`intimacy=${params.intimacyLevel.toFixed(2)}`);
-
-    // 输出类似: [STYLE] tone=lazy;slang=0.8;intimacy=0.9
-    return tags.length ? `[STYLE] ${tags.join(';')}` : '';
+    return tags.length ? `[STYLE] ${tags.join('; ')}` : '';
   }
 
   /**
@@ -88,7 +84,7 @@ export class PromptBuilder {
   }
 
   /**
-   * 构建基础 System Prompt（仅人格 + 语言约束，清理格式）
+   * 构建 System Prompt
    */
   buildSystem(persona: Persona): string {
     const lines = [
@@ -97,7 +93,7 @@ export class PromptBuilder {
       `语言约束：禁止AI腔、讲大道理、格式化、分点、括号动作`,
     ];
 
-    // 只在 persona 有额外约束时才添加
+    // 添加 persona 额外约束
     if (persona.constraints) {
       lines.push(`角色约束：${persona.constraints}`);
     }
@@ -106,21 +102,7 @@ export class PromptBuilder {
   }
 
   /**
-   * @deprecated 使用 buildSystem() 代替。动态内容现在放在 user message 中。
-   */
-  build(
-    persona: Persona,
-    dynamicStyle: DynamicStyleParams,
-    replyContext?: ReplyContext,
-    longTermMemory?: LongTermMemory,
-  ): string {
-    logger.warn('prompt', 'build() is deprecated, use buildSystem() instead');
-    return this.buildSystem(persona);
-  }
-
-  /**
-   * 构建完整的 LLM Messages 数组
-   * 结构：[STYLE] + [SUMMARY] + [MEMORY] + [CONTEXT] + [TARGET] + [INSTRUCTION]
+   * 构建最终 prompts
    */
   buildMessages(
     systemPrompt: string,
@@ -134,7 +116,7 @@ export class PromptBuilder {
     const targetMessage = replyContext.targetTurn?.content || currentUserMessage;
     const allTurns = replyContext.recentTurns;
 
-    // 找到最后一次 bot 回复的位置
+    // 最后一次 bot 回复的位置
     let lastBotIndex = -1;
     for (let i = allTurns.length - 1; i >= 0; i -= 1) {
       if (allTurns[i].role === 'bot') {
@@ -143,11 +125,11 @@ export class PromptBuilder {
       }
     }
 
-    // 1) 构建上下文 [HISTORICAL]/[NEW_WINDOW]
+    // 上下文 [HISTORICAL]/[NEW_WINDOW]
     const contextLines: string[] = [];
 
     if (lastBotIndex === -1) {
-      // 没有bot说过话，全部消息都是 NEW_WINDOW
+      // 没有bot说过话，全部为 NEW_WINDOW
       contextLines.push('[NEW_WINDOW]');
       for (const turn of allTurns) {
         const name = turn.role === 'bot' ? '你' : turn.userName || turn.userId || '某人';
@@ -157,7 +139,7 @@ export class PromptBuilder {
       // 有bot说过话，分两个区间
       const historicalStartIndex = Math.max(0, lastBotIndex - 5);
 
-      // [HISTORICAL] 区间：turns[max(0, lastBotIndex - 5) ... lastBotIndex]（包括bot回复本身）
+      // [HISTORICAL]
       contextLines.push('[HISTORICAL]');
       for (let i = historicalStartIndex; i <= lastBotIndex; i += 1) {
         const turn = allTurns[i];
@@ -165,7 +147,7 @@ export class PromptBuilder {
         contextLines.push(`${name}: ${turn.content}`);
       }
 
-      // [NEW_WINDOW] 区间：turns[lastBotIndex + 1 ... end]（之后的消息）
+      // [NEW_WINDOW]
       if (lastBotIndex + 1 < allTurns.length) {
         contextLines.push('[NEW_WINDOW]');
         for (let i = lastBotIndex + 1; i < allTurns.length; i += 1) {
@@ -178,10 +160,10 @@ export class PromptBuilder {
 
     const contextBlock = contextLines.join('\n');
 
-    // 2) [TARGET]
+    // [TARGET]
     const targetBlock = `[TARGET]\n${targetName || '对方'}: ${targetMessage}`;
 
-    // 3) 组合所有部分
+    // 组装 user message
     const sections: string[] = [];
 
     // 动态风格
@@ -197,7 +179,7 @@ export class PromptBuilder {
     const memoryLine = this.buildLongTermMemory(longTermMemory);
     if (memoryLine) sections.push(memoryLine);
 
-    // 上下文（有内容才加，无历史时不加标签）
+    // 上下文（无历史时不添加标签）
     if (contextBlock) {
       sections.push(contextBlock);
     }
@@ -205,7 +187,7 @@ export class PromptBuilder {
     // 目标消息
     sections.push(targetBlock);
 
-    // 明确指令（最前）
+    // 明确指令
     sections.unshift(
       `[INSTRUCTION]
 - 只针对 [TARGET] 生成回复

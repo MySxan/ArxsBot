@@ -6,11 +6,6 @@ const logger = createLogger(config);
 
 /**
  * Utterance planner - decides how to split and deliver a raw reply
- *
- * This module asks three questions before splitting:
- * 1. Should we split at all?
- * 2. If yes, how many segments?
- * 3. How should each segment be formatted and timed?
  */
 export class UtterancePlanner {
   /**
@@ -45,7 +40,7 @@ export class UtterancePlanner {
     // Step 2: Split into sentences (keeping punctuation for now)
     const sentences = this.splitIntoSentences(trimmed);
 
-    // Step 3: Decide how many segments to send (2-4 typically)
+    // Step 3: Decide how many segments to send
     const targetSegments = this.decideSegmentCount(sentences, length, verbosity, multiPref);
     logger.debug(
       'utterance',
@@ -95,7 +90,7 @@ export class UtterancePlanner {
   }
 
   /**
-   * Split text into sentences (keeping punctuation)
+   * Split text into sentences
    */
   private splitIntoSentences(text: string): string[] {
     // First split on major sentence boundaries
@@ -123,7 +118,7 @@ export class UtterancePlanner {
   }
 
   /**
-   * Decide how many segments to create (2-4 typically)
+   * Decide how many segments to create
    */
   private decideSegmentCount(
     sentences: string[],
@@ -174,7 +169,7 @@ export class UtterancePlanner {
   }
 
   /**
-   * Humanize segment text - remove ending punctuation for non-last segments
+   * remove ending punctuation for non-last segments
    */
   private humanizeSegmentText(text: string, isLast: boolean): string {
     const trimmed = text.trim();
@@ -190,7 +185,7 @@ export class UtterancePlanner {
   }
 
   /**
-   * Get delay for a segment (in milliseconds)
+   * Get delay for a segment (ms)
    */
   private getSegmentDelay(index: number, totalSegments: number, verbosity: number): number {
     // First segment: no delay (sent immediately after LLM response)

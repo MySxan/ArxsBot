@@ -1,3 +1,6 @@
+/**
+ * @file ConversationRouter class for handling chat events and routing them to appropriate handlers.
+ */
 import type { ChatEvent } from '../events/ChatEvent.js';
 import type { MessageSender } from '../messaging/MessageSender.js';
 import type { Logger } from '../../infra/logger/logger.js';
@@ -12,29 +15,30 @@ import { PromptBuilder, type DynamicStyleParams } from '../style/PromptBuilder.j
 import { ContextBuilder } from '../context/ContextBuilder.js';
 
 /**
- * Utility function for async sleep
+ * Sleep for a specified duration.
+ * @param ms - The number of milliseconds to sleep.
+ * @returns A promise that resolves after the specified duration.
  */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
- * Calculate typing delay based on character count and randomness
- * Formula: baseTime + (charCount * timePerChar) + randomFactor
- * Simulates human typing: ~50-100ms per character, plus random variation
+ * Calculate the typing delay for a given text.
+ * @param text - The text to calculate the delay for.
+ * @returns The calculated typing delay in milliseconds.
  */
 function calculateTypingDelay(text: string): number {
   const baseTime = 500; // 基础延迟（收到消息后等待时间）
-  const timePerChar = 40; // 每个字符平均打字时间（ms）
-  const randomFactor = Math.random() * 800; // 随机因素（0-800ms）
+  const timePerChar = 40; // 每个字符平均打字时间
+  const randomFactor = Math.random() * 800; // 随机因素
   const charCount = text.length;
 
   return baseTime + charCount * timePerChar + randomFactor;
 }
 
 /**
- * Main event router - handles all incoming chat events.
- * Flow: Event → Planner → Command/Chat handler → Response
+ * A class for routing chat events to appropriate handlers.
  */
 export class ConversationRouter {
   private logger: Logger;
@@ -45,9 +49,17 @@ export class ConversationRouter {
   private memberStats?: MemberStatsStore;
   private utterancePlanner: UtterancePlanner;
   private contextBuilder?: ContextBuilder;
-  /** Stores the last used LLM prompts for /prompts command */
   public llmPromptHistory: string[] = [];
 
+  /**
+   * Create a new ConversationRouter instance.
+   * @param logger - Logger instance for logging.
+   * @param sender - MessageSender instance for sending messages.
+   * @param commandRouter - CommandRouter instance for handling commands.
+   * @param replyer - LlmReplyGenerator instance for generating replies.
+   * @param conversationStore - ConversationStore instance for storing conversation history.
+   * @param memberStats - MemberStatsStore instance for storing member statistics.
+   */
   constructor(
     logger: Logger,
     sender: MessageSender,
@@ -64,14 +76,15 @@ export class ConversationRouter {
     this.memberStats = memberStats;
     this.utterancePlanner = new UtterancePlanner();
 
-    // Initialize ContextBuilder if ConversationStore is available
     if (conversationStore) {
       this.contextBuilder = new ContextBuilder(conversationStore);
     }
   }
 
   /**
-   * Handle incoming chat event.
+   * Handle incoming chat events.
+   * @param event - The incoming chat event.
+   * @returns A promise that resolves when the event is handled.
    */
   async handleEvent(event: ChatEvent): Promise<void> {
     this.logger.debug(
@@ -82,10 +95,10 @@ export class ConversationRouter {
     const timestamp = event.timestamp ?? Date.now();
     const conversationKey = `${event.platform}:${event.groupId}`;
 
-    // Layer A: Storage - ALWAYS record all messages for memory/context
+    // 存储消息到 conversation store
     if (this.conversationStore) {
       if (event.fromBot) {
-        // Store bot's own messages as assistant turns
+        // 存储 bot 自发消息
         this.conversationStore.appendTurn(conversationKey, {
           role: 'bot',
           content: event.rawText,
@@ -93,9 +106,9 @@ export class ConversationRouter {
           userId: 'bot',
         });
         this.logger.debug('router', 'Stored bot self-message, skipping processing');
-        return; // Don't process bot's own messages
+        return;
       } else {
-        // Store user messages with derived fields
+        // 存储用户消息
         this.conversationStore.appendTurn(conversationKey, {
           role: 'user',
           content: event.rawText,
@@ -108,8 +121,7 @@ export class ConversationRouter {
       }
     }
 
-    // Layer B: Processing filter - skip bot messages and update stats only for user messages
-
+    // 跳过 bot 消息，仅更新用户消息的统计信息
     if (this.memberStats) {
       this.memberStats.onUserMessage(
         event.platform,
@@ -121,7 +133,7 @@ export class ConversationRouter {
       );
     }
 
-    // Layer C: Planner decision - decide whether to reply based on context/energy/rules
+    // planner 决定是否回复
     const planResult = plan(event, this.memberStats);
 
     if (!planResult.shouldReply) {
@@ -141,12 +153,12 @@ export class ConversationRouter {
       `Handling message (mode: ${planResult.mode}, delay: ${planResult.delayMs}ms)`,
     );
 
-    // Step 2: Apply thinking delay if needed
+    // 添加延迟
     if (planResult.delayMs > 0) {
       await sleep(planResult.delayMs);
     }
 
-    // Step 3: Route based on mode
+    // 根据模式路由
     try {
       switch (planResult.mode) {
         case 'command':
@@ -167,15 +179,14 @@ export class ConversationRouter {
         case 'empathySupport':
         case 'deflect':
           if (this.replyer && this.conversationStore && this.contextBuilder) {
-            // 新架构：三层分离
-            // 1. 怎么选：ContextBuilder 智能选择上下文
+            // ContextBuilder 选择上下文
             const replyContext = this.contextBuilder.buildForEvent(event);
 
-            // 2. 组装参数：行为规划 → 动态风格参数
+            // 行为规划 & 动态风格参数
             const promptBuilder = new PromptBuilder();
             const currentPersona = this.replyer.getPersona();
 
-            // 获取用户亲密度（用于动态参数）
+            // 获取用户亲密度
             const memberKey = this.memberStats?.buildMemberKey(
               event.platform,
               event.groupId,
@@ -185,7 +196,7 @@ export class ConversationRouter {
               memberKey && this.memberStats ? this.memberStats.getIntimacy(memberKey) : 0;
             const botEnergy = globalEnergyModel.getEnergy();
 
-            // 动态生成风格参数（由 BehaviorPlanner 提供）
+            // 生成风格参数（BehaviorPlanner）
             const dynamicStyle: DynamicStyleParams = (() => {
               switch (planResult.mode) {
                 case 'casual':
@@ -246,26 +257,21 @@ export class ConversationRouter {
               }
             })();
 
-            // 3. 怎么喂：生成 System Prompt + LLM Messages
-            // System Prompt 现在只包含：角色设定 + 固定约束
+            // 构建 System Prompt
             const systemMsg = promptBuilder.buildSystem(currentPersona);
 
-            // 构建完整的 LLM Messages（包含动态风格、记忆、上下文等）
+            // 构建 LLM Messages
             const llmMessages = promptBuilder.buildMessages(
               systemMsg,
               replyContext,
               dynamicStyle,
-              undefined, // longTermMemory - 暂时为空，未来可接入
+              undefined, // longTermMemory 待接入
               event.userName || event.userId,
               event.rawText,
             );
 
-            // 记录完整 prompt（用于 /prompts 指令查看）
-            this.llmPromptHistory.push(
-              llmMessages
-                .map((m) => m.content) // 保留所有内容，只去掉 role 标签
-                .join('\n\n'),
-            );
+            // 记录 prompt（用于 /prompts）
+            this.llmPromptHistory.push(llmMessages.map((m) => m.content).join('\n\n'));
 
             // 生成回复
             const replyText = await this.replyer.replyWithMessages(llmMessages);
@@ -275,7 +281,7 @@ export class ConversationRouter {
               `Will send reply (mode: ${planResult.mode}) to ${event.userId}: "${replyText.substring(0, 40)}..."`,
             );
 
-            // Record that we actually replied (for debug tracking)
+            // 记录回复 (用于 debug)
             const groupKey = `${event.platform}:${event.groupId}`;
             const replyPlanInfo: PlanDebugInfo = {
               event: {
@@ -292,7 +298,7 @@ export class ConversationRouter {
             };
             recordReplyPlan(groupKey, replyPlanInfo);
 
-            // Step 3: Record bot reply in conversation history
+            // 记录回复到 conversation store
             this.conversationStore.appendTurn(conversationKey, {
               role: 'bot',
               content: replyText,
@@ -300,12 +306,12 @@ export class ConversationRouter {
               userId: 'bot',
             });
 
-            // Update member stats with a directed reply
+            // 更新成员统计
             if (this.memberStats) {
               this.memberStats.onBotReply(event.platform, event.groupId, event.userId, Date.now());
             }
 
-            // Step 4: Plan how to deliver the utterance
+            // 规划分段发送
             const utterancePlan = this.utterancePlanner.makePlan(replyText, {
               persona: {
                 verbosity: currentPersona.verbosity,
@@ -314,7 +320,7 @@ export class ConversationRouter {
               isAtReply: event.mentionsBot || false,
             });
 
-            // Step 5: Calculate typing delay before sending
+            // 模拟输入延迟
             const typingDelay = calculateTypingDelay(replyText);
             this.logger.debug(
               'router',
@@ -322,22 +328,45 @@ export class ConversationRouter {
             );
             await sleep(typingDelay);
 
-            // Step 6: Send segments with planned delays
-            // 检查是否包含 <brk> 分隔符（多条消息）
-            if (replyText.includes('<brk>')) {
-              const segments = replyText
-                .split('<brk>')
+            // 发送分段消息
+            const hasBreakMarker = replyText.includes('<brk>');
+            const hasNewlines = replyText.includes('\n');
+
+            if (hasBreakMarker || hasNewlines) {
+              // 处理 <brk>
+              let segments: string[] = [];
+              if (hasBreakMarker) {
+                segments = replyText.split('<brk>');
+              } else {
+                segments = [replyText];
+              }
+
+              // 按换行符拆分
+              const finalSegments = segments
+                .flatMap((seg) => seg.split('\n'))
                 .map((s) => s.trim())
-                .filter((s) => s.length > 0);
-              for (let i = 0; i < segments.length; i += 1) {
+                .filter((s) => s.length > 0)
+                .slice(0, 3);
+
+              this.logger.debug(
+                'router',
+                `Sending ${finalSegments.length} segments (${hasBreakMarker ? 'brk+' : ''}${hasNewlines ? 'newline' : ''})`,
+              );
+
+              for (let i = 0; i < finalSegments.length; i += 1) {
                 if (i > 0) {
-                  // 分条消息间隔 500~1200ms
-                  await sleep(500 + Math.random() * 700);
+                  // 根据上一条消息长度动态计算间隔
+                  const prevLength = finalSegments[i - 1].length;
+                  const baseDelay = 500;
+                  const charDelay = prevLength * 40; // 40ms per char
+                  const randomDelay = Math.random() * 700;
+                  const totalDelay = baseDelay + charDelay + randomDelay;
+                  await sleep(Math.min(totalDelay, 3000)); // 最多3秒
                 }
-                await this.sender.sendText(event.groupId, segments[i]);
+                await this.sender.sendText(event.groupId, finalSegments[i]);
               }
             } else {
-              // 单条消息：使用 utterancePlan 来处理分句
+              // 单条消息使用 utterancePlan 处理分句
               for (const segment of utterancePlan.segments) {
                 if (segment.delayMs > 0) {
                   await sleep(segment.delayMs);
@@ -346,10 +375,9 @@ export class ConversationRouter {
               }
             }
 
-            // Update bot energy after sending a reply
+            // 更新能量
             globalEnergyModel.onReplySent();
           } else {
-            // Fallback if LLM, conversation store, or context builder not configured
             this.logger.warn(
               'router',
               'Replyer, conversation store, or context builder not configured',

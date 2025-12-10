@@ -3,10 +3,6 @@ import { createLogger } from '../../infra/logger/logger.js';
 
 const logger = createLogger(config);
 
-/**
- * Simple energy model to simulate bot "energy" / willingness to chat.
- * Energy recovers over time and is spent when the bot replies.
- */
 export interface EnergyState {
   value: number; // 0 ~ 1
   lastUpdate: number; // timestamp ms
@@ -14,7 +10,7 @@ export interface EnergyState {
 
 export class EnergyModel {
   private state: EnergyState = { value: 1, lastUpdate: Date.now() };
-  private recoveryPerMinute = 0.02; // recover 0.02 per minute
+  private recoveryPerMinute = 0.05; // recover 0.02 per minute
   private costPerReply = 0.1; // spend 0.10 per reply
 
   private tick(): void {
