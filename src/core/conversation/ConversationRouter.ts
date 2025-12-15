@@ -13,6 +13,7 @@ import { UtterancePlanner } from '../style/UtterancePlanner.js';
 import { globalEnergyModel } from '../planner/EnergyModel.js';
 import { PromptBuilder, type DynamicStyleParams } from '../style/PromptBuilder.js';
 import { ContextBuilder } from '../context/ContextBuilder.js';
+import { MessageDebouncer } from './MessageDebouncer.js';
 
 /**
  * Sleep for a specified duration.
@@ -49,6 +50,7 @@ export class ConversationRouter {
   private memberStats?: MemberStatsStore;
   private utterancePlanner: UtterancePlanner;
   private contextBuilder?: ContextBuilder;
+  private debouncer: MessageDebouncer;
   public llmPromptHistory: string[] = [];
 
   /**
@@ -75,6 +77,7 @@ export class ConversationRouter {
     this.conversationStore = conversationStore;
     this.memberStats = memberStats;
     this.utterancePlanner = new UtterancePlanner();
+    this.debouncer = new MessageDebouncer(logger, 5000); // 5s debounce for regular messages
 
     if (conversationStore) {
       this.contextBuilder = new ContextBuilder(conversationStore);
@@ -133,6 +136,27 @@ export class ConversationRouter {
       );
     }
 
+    // 检查是否为命令或@机器人 - 这些不使用防抖，立即处理
+    const text = event.rawText.trim();
+    const isCommand = text.startsWith('/') || text.startsWith('！');
+    const isMention = event.mentionsBot;
+
+    if (isCommand || isMention) {
+      // 命令和@消息立即处理，不使用防抖
+      await this.processEvent(event);
+    } else {
+      // 普通消息使用防抖机制：等待5秒检查是否有同一人的新消息
+      this.debouncer.debounce(event, async (bufferedEvent) => {
+        await this.processEvent(bufferedEvent);
+      });
+    }
+  }
+
+  /**
+   * Process a single event (actual reply logic)
+   * @param event - The chat event to process
+   */
+  private async processEvent(event: ChatEvent): Promise<void> {
     // planner 决定是否回复
     const planResult = plan(event, this.memberStats);
 
@@ -283,6 +307,7 @@ export class ConversationRouter {
 
             // 记录回复 (用于 debug)
             const groupKey = `${event.platform}:${event.groupId}`;
+            const conversationKey = `${event.platform}:${event.groupId}`;
             const replyPlanInfo: PlanDebugInfo = {
               event: {
                 platform: event.platform,
@@ -394,3 +419,4 @@ export class ConversationRouter {
     }
   }
 }
+
