@@ -157,12 +157,10 @@ export class PromptBuilder {
 
       // [HISTORICAL]
       // We intentionally take the 5 turns BEFORE the last bot message (exclude bot turn itself).
-      if (historicalStartIndex < lastBotIndex) {
-        contextLines.push('[HISTORICAL]');
-        for (let i = historicalStartIndex; i < lastBotIndex; i += 1) {
-          const turn = allTurns[i];
-          contextLines.push(this.formatTurnLine(turn));
-        }
+      contextLines.push('[HISTORICAL]');
+      for (let i = historicalStartIndex; i < lastBotIndex; i += 1) {
+        const turn = allTurns[i];
+        contextLines.push(this.formatTurnLine(turn));
       }
 
       // [NEW_WINDOW]

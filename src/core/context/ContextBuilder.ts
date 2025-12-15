@@ -43,19 +43,22 @@ export class ContextBuilder {
     // 1) 获取所有最近的消息（包含当前消息）
     const allRecent = this.conversationStore.getRecentTurns(key, 40);
 
-    // 2) 找到最后一次 bot 回复的位置（在所有消息中，包括当前消息）
-    const lastBotIndex = [...allRecent].reverse().findIndex((t) => t.role === 'bot');
-    const lastBotTurn =
-      lastBotIndex === -1 ? undefined : allRecent[allRecent.length - 1 - lastBotIndex];
+    // 2) 找到最后一次 bot 回复（在所有消息中，包括当前消息）
+    const lastBotIndexFromEnd = [...allRecent].reverse().findIndex((t) => t.role === 'bot');
+    const lastBotAbsIndex =
+      lastBotIndexFromEnd === -1 ? -1 : allRecent.length - 1 - lastBotIndexFromEnd;
+    const lastBotTurn = lastBotAbsIndex === -1 ? undefined : allRecent[lastBotAbsIndex];
 
     const sinceLastBotMs = lastBotTurn ? now - lastBotTurn.timestamp : Infinity;
 
     // 3) 决定"这一轮上下文"的候选区间
     let candidate: ChatTurn[];
     if (sinceLastBotMs < 2 * 60 * 1000) {
-      // 2 分钟内，按"这一轮对话"来取（从上次 bot 回复到现在，包括当前消息）
-      const lastBotTs = lastBotTurn!.timestamp;
-      candidate = allRecent.filter((t) => t.timestamp >= lastBotTs);
+      // 2 分钟内：
+      // - NEW_WINDOW: last bot 之后到现在
+      // - HISTORICAL: last bot 之前的 5 条（用于理解上下文，不包含 bot 那条本身）
+      const start = Math.max(0, (lastBotAbsIndex === -1 ? allRecent.length : lastBotAbsIndex) - 5);
+      candidate = allRecent.slice(start);
     } else {
       // 很久没说话了，只取最近几条（包括当前消息）
       candidate = allRecent.slice(-6);
@@ -93,8 +96,8 @@ export class ContextBuilder {
    * 从候选上下文中挑选最多 5 条给 LLM（模拟人类短期记忆）
    */
   private pickForLLM(candidate: ChatTurn[]): ChatTurn[] {
-    // 简单版：最多 5 条，保证包含当前 user 前面的几条
-    const max = 5;
+    // Allow enough room for: 5 turns before last bot + (bot + new window)
+    const max = 12;
     return candidate.slice(-max);
   }
 
