@@ -9,10 +9,17 @@ function sleep(ms: number): Promise<void> {
 }
 
 function calculateTypingDelay(text: string): number {
-  const baseTime = 500;
-  const timePerChar = 40;
-  const randomFactor = Math.random() * 800;
-  return baseTime + text.length * timePerChar + randomFactor;
+  // More human-like pacing:
+  // - small replies still take a moment (min clamp)
+  // - long replies don't stall forever (max clamp)
+  const baseTime = 1000;
+  const timePerChar = 60;
+  const randomFactor = Math.random() * 1500;
+  const raw = baseTime + text.length * timePerChar + randomFactor;
+  // For ~10 chars, this yields ~2.6-4.1s with min around ~2.8s.
+  const minDelay = 2800;
+  const maxDelay = 8000;
+  return Math.max(minDelay, Math.min(raw, maxDelay));
 }
 
 export interface SendPersonaParams {
