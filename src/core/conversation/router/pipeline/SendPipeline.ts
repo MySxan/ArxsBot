@@ -49,6 +49,12 @@ export class SendPipeline {
     const sessionKey = `${event.platform}:${event.groupId}`;
     const token = this.deps.sessionStore?.startTyping(sessionKey);
 
+    const quoteTarget = (event as any).__quoteTarget as ChatEvent | undefined;
+    const replyTo =
+      quoteTarget && quoteTarget.messageId && quoteTarget.messageId !== '0'
+        ? quoteTarget.messageId
+        : undefined;
+
     // 规划分段发送
     const utterancePlan = this.utterancePlanner.makePlan(replyText, {
       persona: {
@@ -128,7 +134,7 @@ export class SendPipeline {
             return { sent: false, cancelled: true };
           }
         }
-        await this.deps.sender.sendText(event.groupId, finalSegments[i]);
+        await this.deps.sender.sendText(event.groupId, finalSegments[i], i === 0 ? replyTo : undefined);
       }
 
       if (token && this.deps.sessionStore) {
@@ -138,6 +144,7 @@ export class SendPipeline {
     }
 
     // 单条消息使用 utterancePlan 处理分句
+    let sentAny = false;
     for (const segment of utterancePlan.segments) {
       if (this.isCancelled(token)) {
         this.deps.logger.debug('router', `Send cancelled mid-utterance (${sessionKey})`);
@@ -158,7 +165,9 @@ export class SendPipeline {
           return { sent: false, cancelled: true };
         }
       }
-      await this.deps.sender.sendText(event.groupId, segment.text);
+
+      await this.deps.sender.sendText(event.groupId, segment.text, sentAny ? undefined : replyTo);
+      sentAny = true;
     }
 
     if (token && this.deps.sessionStore) {

@@ -24,6 +24,7 @@ export class TypingInterruption {
     const threshold = this.deps.cancelThreshold ?? 3;
     if (session.incomingWhileTyping >= threshold) {
       token.cancelled = true;
+      this.deps.sessionStore.markForceQuoteNextFlush(sessionKey);
       this.deps.logger.debug(
         'router',
         `Typing cancelled due to ${session.incomingWhileTyping} incoming messages (user=${event.userId}, group=${event.groupId})`,

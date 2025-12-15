@@ -20,16 +20,26 @@ export class QQMessageSender implements MessageSender {
   async sendText(groupId: string, text: string, replyTo?: string): Promise<void> {
     // Delay handled by ConversationRouter (typing delay + segment pacing)
     // Build OneBot11 message
+    const segments: Array<{ type: string; data: Record<string, unknown> }> = [];
+    if (replyTo && replyTo !== '0') {
+      const parsed = Number.parseInt(replyTo, 10);
+      segments.push({
+        type: 'reply',
+        data: {
+          id: Number.isFinite(parsed) ? parsed : replyTo,
+        },
+      });
+    }
+    segments.push({
+      type: 'text',
+      data: { text },
+    });
+
     const message = {
       action: 'send_group_msg',
       params: {
         group_id: parseInt(groupId, 10),
-        message: [
-          {
-            type: 'text',
-            data: { text },
-          },
-        ],
+        message: segments,
       },
     };
 

@@ -107,9 +107,98 @@ export class ConversationRouter {
   }
 
   private async handleDebounced(snapshot: DebounceSnapshot): Promise<void> {
-    // Step C: snapshot provides all events; for now keep behavior unchanged
-    // by processing only the last event.
-    await this.processEvent(snapshot.lastEvent);
+    const sessionKey = `${snapshot.lastEvent.platform}:${snapshot.lastEvent.groupId}`;
+    const session = this.sessionStore.get(sessionKey);
+
+    const mergedText = this.buildMergedText(snapshot.events, 6);
+    const mergedEvent: ChatEvent = { ...snapshot.lastEvent, rawText: mergedText };
+    (mergedEvent as any).__debounce = {
+      count: snapshot.count,
+      firstAt: snapshot.firstAt,
+      lastAt: snapshot.lastAt,
+    };
+
+    if (!this.shouldSpeak(sessionKey, session, snapshot, mergedText)) {
+      return;
+    }
+
+    const shouldQuote =
+      snapshot.count >= 3 ||
+      Boolean(session.forceQuoteNextFlush) ||
+      session.incomingWhileTyping >= 3; // defensive: if some other code wrote this
+
+    if (shouldQuote) {
+      (mergedEvent as any).__quoteTarget = this.pickQuoteTarget(snapshot.events);
+      this.sessionStore.clearForceQuoteNextFlush(sessionKey);
+    }
+
+    await this.processEvent(mergedEvent);
+  }
+
+  private buildMergedText(events: ChatEvent[], max = 6): string {
+    return events
+      .slice(-max)
+      .map((e) => e.rawText.trim())
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  private hasQuestion(text: string): boolean {
+    const t = text.trim();
+    if (t.length === 0) return false;
+
+    // Punctuation
+    if (t.includes('?') || t.includes('？')) return true;
+
+    // Common Chinese question words / patterns
+    return /\bwhy\b|\bhow\b|\bwhat\b|吗|么|什么|咋|咋样|咋办|啥|如何|怎么|怎样|为何|为什么|能不能|能否|可不可以|可否|是否|哪里|哪儿|哪个|哪位|谁|多少|几/.test(
+      t,
+    );
+  }
+
+  private shouldSpeak(
+    sessionKey: string,
+    session: { lastBotReplyAt?: number; forceQuoteNextFlush?: boolean },
+    snapshot: DebounceSnapshot,
+    mergedText: string,
+  ): boolean {
+    // If we cancelled mid-typing, prefer replying on next flush.
+    if (session.forceQuoteNextFlush) {
+      return true;
+    }
+
+    const now = Date.now();
+    const cooldownMs = 5000;
+    const sinceLastReply = now - (session.lastBotReplyAt ?? 0);
+
+    if (sinceLastReply >= cooldownMs) {
+      return true;
+    }
+
+    // Cooldown window: only break for follow-up questions / clarifications.
+    if (snapshot.count >= 2 && this.hasQuestion(mergedText)) {
+      return true;
+    }
+
+    this.logger.debug(
+      'router',
+      `TurnTakingGuard: skip (sinceLastReply=${sinceLastReply}ms, count=${snapshot.count}) for ${sessionKey}`,
+    );
+    return false;
+  }
+
+  private pickQuoteTarget(events: ChatEvent[]): ChatEvent {
+    const scored = events.map((e, idx) => {
+      const t = e.rawText.trim();
+      let s = 0;
+      if (this.hasQuestion(t)) s += 3;
+      if (t.length >= 12) s += 2;
+      if (!/^[\s\p{P}\p{S}]+$/u.test(t)) s += 1;
+      if (idx >= events.length - 2) s += 1;
+      return { e, s };
+    });
+    scored.sort((a, b) => b.s - a.s);
+    return scored[0]?.e ?? events[events.length - 1];
   }
 
   /**

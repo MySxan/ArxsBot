@@ -7,6 +7,7 @@ export interface SessionState {
   lastBotReplyAt?: number;
   typingToken?: TypingToken;
   incomingWhileTyping: number;
+  forceQuoteNextFlush?: boolean;
 }
 
 export class SessionStateStore {
@@ -16,7 +17,7 @@ export class SessionStateStore {
     const existing = this.sessions.get(sessionKey);
     if (existing) return existing;
 
-    const created: SessionState = { incomingWhileTyping: 0 };
+    const created: SessionState = { incomingWhileTyping: 0, forceQuoteNextFlush: false };
     this.sessions.set(sessionKey, created);
     return created;
   }
@@ -40,5 +41,15 @@ export class SessionStateStore {
   setLastBotReplyAt(sessionKey: string, timestamp: number): void {
     const session = this.get(sessionKey);
     session.lastBotReplyAt = timestamp;
+  }
+
+  markForceQuoteNextFlush(sessionKey: string): void {
+    const session = this.get(sessionKey);
+    session.forceQuoteNextFlush = true;
+  }
+
+  clearForceQuoteNextFlush(sessionKey: string): void {
+    const session = this.get(sessionKey);
+    session.forceQuoteNextFlush = false;
   }
 }
