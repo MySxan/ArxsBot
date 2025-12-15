@@ -9,10 +9,29 @@ export interface SessionState {
   incomingWhileTyping: number;
   forceQuoteNextFlush?: boolean;
   messageSeq: number;
+  queueTail?: Promise<void>;
 }
 
 export class SessionStateStore {
   private sessions = new Map<string, SessionState>();
+
+  /**
+   * Serialize async work per sessionKey.
+   * Ensures we don't run multiple reply pipelines concurrently in the same group.
+   */
+  runQueued<T>(sessionKey: string, fn: () => Promise<T>): Promise<T> {
+    const session = this.get(sessionKey);
+    const prev = session.queueTail ?? Promise.resolve();
+
+    const task = prev.then(fn);
+    // Keep the chain alive even if a task fails.
+    session.queueTail = task.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    return task;
+  }
 
   get(sessionKey: string): SessionState {
     const existing = this.sessions.get(sessionKey);

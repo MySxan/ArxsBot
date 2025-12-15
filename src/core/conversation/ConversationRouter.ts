@@ -102,16 +102,21 @@ export class ConversationRouter {
 
     if (isCommand || isMention) {
       // 命令和@消息立即处理，不使用防抖
-      await this.processEvent(event);
+      await this.sessionStore.runQueued(sessionKey, async () => {
+        await this.processEvent(event);
+      });
     } else {
       // 普通消息使用防抖机制：等待5秒检查是否有同一人的新消息
       this.debouncer.debounce(event, async (snapshot) => {
-        await this.handleDebounced(snapshot);
+        const groupSessionKey = `${snapshot.lastEvent.platform}:${snapshot.lastEvent.groupId}`;
+        await this.sessionStore.runQueued(groupSessionKey, async () => {
+          await this.handleDebouncedInternal(snapshot);
+        });
       });
     }
   }
 
-  private async handleDebounced(snapshot: DebounceSnapshot): Promise<void> {
+  private async handleDebouncedInternal(snapshot: DebounceSnapshot): Promise<void> {
     const sessionKey = `${snapshot.lastEvent.platform}:${snapshot.lastEvent.groupId}`;
     const session = this.sessionStore.get(sessionKey);
 
