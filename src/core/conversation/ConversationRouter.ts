@@ -90,6 +90,11 @@ export class ConversationRouter {
 
     // Session-level typing interruption
     const sessionKey = `${event.platform}:${event.groupId}`;
+
+    // Track global message order within this group (covers other users' interleaving)
+    const seq = this.sessionStore.nextMessageSeq(sessionKey);
+    (event as any).__seq = seq;
+
     this.typingInterruption.onIncomingUserMessage(sessionKey, event);
 
     // 检查是否为命令或@机器人 - 这些不使用防抖，立即处理
@@ -123,18 +128,12 @@ export class ConversationRouter {
 
     (mergedEvent as any).__targetText = targetEvent.rawText;
 
+    // Always carry a quote target candidate; SendPipeline will decide whether to reply-to
+    // based on the message-gap rule (>=3 messages since the target).
+    (mergedEvent as any).__quoteTarget = targetEvent;
+
     if (!this.shouldSpeak(sessionKey, session, snapshot, mergedText)) {
       return;
-    }
-
-    const shouldQuote =
-      snapshot.count >= 3 ||
-      Boolean(session.forceQuoteNextFlush) ||
-      session.incomingWhileTyping >= 3; // defensive: if some other code wrote this
-
-    if (shouldQuote) {
-      (mergedEvent as any).__quoteTarget = targetEvent;
-      this.sessionStore.clearForceQuoteNextFlush(sessionKey);
     }
 
     await this.processEvent(mergedEvent);
@@ -212,6 +211,14 @@ export class ConversationRouter {
    */
   private async processEvent(event: ChatEvent): Promise<void> {
     try {
+      // Provide defaults so send-time quote logic can work for non-debounced paths too.
+      if ((event as any).__targetText === undefined) {
+        (event as any).__targetText = event.rawText;
+      }
+      if ((event as any).__quoteTarget === undefined) {
+        (event as any).__quoteTarget = event;
+      }
+
       const { isCommand } = this.classifier.classify(event);
       if (isCommand) {
         if (this.commandRouter) {
@@ -264,9 +271,11 @@ export class ConversationRouter {
         return;
       }
 
-      replyPipeline.commitReply(event, result.planResult, result.replyText);
-
+      // Successful send: consume any pending "force quote" flag.
       const sessionKey = `${event.platform}:${event.groupId}`;
+      this.sessionStore.clearForceQuoteNextFlush(sessionKey);
+
+      replyPipeline.commitReply(event, result.planResult, result.replyText);
       this.sessionStore.setLastBotReplyAt(sessionKey, Date.now());
     } catch (error) {
       this.logger.error('router', `Failed to handle event: ${error}`);

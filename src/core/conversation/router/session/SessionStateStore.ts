@@ -8,6 +8,7 @@ export interface SessionState {
   typingToken?: TypingToken;
   incomingWhileTyping: number;
   forceQuoteNextFlush?: boolean;
+  messageSeq: number;
 }
 
 export class SessionStateStore {
@@ -17,9 +18,19 @@ export class SessionStateStore {
     const existing = this.sessions.get(sessionKey);
     if (existing) return existing;
 
-    const created: SessionState = { incomingWhileTyping: 0, forceQuoteNextFlush: false };
+    const created: SessionState = {
+      incomingWhileTyping: 0,
+      forceQuoteNextFlush: false,
+      messageSeq: 0,
+    };
     this.sessions.set(sessionKey, created);
     return created;
+  }
+
+  nextMessageSeq(sessionKey: string): number {
+    const session = this.get(sessionKey);
+    session.messageSeq += 1;
+    return session.messageSeq;
   }
 
   startTyping(sessionKey: string): TypingToken {

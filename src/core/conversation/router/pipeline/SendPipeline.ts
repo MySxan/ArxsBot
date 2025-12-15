@@ -55,6 +55,16 @@ export class SendPipeline {
         ? quoteTarget.messageId
         : undefined;
 
+    const quoteTargetSeq = quoteTarget ? ((quoteTarget as any).__seq as number | undefined) : undefined;
+    const session = this.deps.sessionStore?.get(sessionKey);
+    const currentSeq = session?.messageSeq;
+    const gap =
+      typeof currentSeq === 'number' && typeof quoteTargetSeq === 'number'
+        ? currentSeq - quoteTargetSeq
+        : undefined;
+    const forceQuote = Boolean(session?.forceQuoteNextFlush);
+    const shouldReplyTo = Boolean(replyTo && (forceQuote || (typeof gap === 'number' && gap >= 3)));
+
     // 规划分段发送
     const utterancePlan = this.utterancePlanner.makePlan(replyText, {
       persona: {
@@ -134,7 +144,11 @@ export class SendPipeline {
             return { sent: false, cancelled: true };
           }
         }
-        await this.deps.sender.sendText(event.groupId, finalSegments[i], i === 0 ? replyTo : undefined);
+        await this.deps.sender.sendText(
+          event.groupId,
+          finalSegments[i],
+          i === 0 && shouldReplyTo ? replyTo : undefined,
+        );
       }
 
       if (token && this.deps.sessionStore) {
@@ -166,7 +180,11 @@ export class SendPipeline {
         }
       }
 
-      await this.deps.sender.sendText(event.groupId, segment.text, sentAny ? undefined : replyTo);
+      await this.deps.sender.sendText(
+        event.groupId,
+        segment.text,
+        sentAny ? undefined : shouldReplyTo ? replyTo : undefined,
+      );
       sentAny = true;
     }
 
