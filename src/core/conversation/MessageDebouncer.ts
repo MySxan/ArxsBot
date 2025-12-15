@@ -1,6 +1,6 @@
 /**
  * @file MessageDebouncer - manages message buffering and prevents rapid successive replies
- * 
+ *
  * Strategy:
  * - When a message arrives, check if same user has pending messages
  * - If no pending: buffer the message and set 5s delay timer
@@ -12,10 +12,22 @@ import type { ChatEvent } from '../events/ChatEvent.js';
 import type { Logger } from '../../infra/logger/logger.js';
 
 interface PendingMessage {
-  event: ChatEvent;
+  events: ChatEvent[];
+  lastEvent: ChatEvent;
   timerId: NodeJS.Timeout;
+  firstAt: number;
+  lastAt: number;
   lastUpdated: number;
 }
+
+export type DebounceSnapshot = {
+  userKey: string; // platform:groupId:userId
+  events: ChatEvent[];
+  lastEvent: ChatEvent;
+  count: number;
+  firstAt: number;
+  lastAt: number;
+};
 
 /**
  * MessageDebouncer provides debouncing for message handling
@@ -44,12 +56,11 @@ export class MessageDebouncer {
    * @param handler - The handler to call when debounce timer fires
    * @returns true if message was buffered (will be processed later), false if should process immediately
    */
-  debounce(
-    event: ChatEvent,
-    handler: (bufferedEvent: ChatEvent) => Promise<void>,
-  ): boolean {
+  debounce(event: ChatEvent, handler: (snapshot: DebounceSnapshot) => Promise<void>): boolean {
     const key = this.getKey(event);
     const pending = this.pending.get(key);
+    const now = Date.now();
+    const eventAt = event.timestamp ?? now;
 
     if (pending) {
       // User already has pending message - update it and reset timer
@@ -61,9 +72,11 @@ export class MessageDebouncer {
       // Clear old timer
       clearTimeout(pending.timerId);
 
-      // Update the buffered event
-      pending.event = event;
-      pending.lastUpdated = Date.now();
+      // Update buffer
+      pending.events.push(event);
+      pending.lastEvent = event;
+      pending.lastAt = eventAt;
+      pending.lastUpdated = now;
 
       // Set new timer
       pending.timerId = setTimeout(() => {
@@ -84,9 +97,12 @@ export class MessageDebouncer {
     }, this.delayMs);
 
     this.pending.set(key, {
-      event,
+      events: [event],
+      lastEvent: event,
       timerId,
-      lastUpdated: Date.now(),
+      firstAt: eventAt,
+      lastAt: eventAt,
+      lastUpdated: now,
     });
 
     return true; // Message buffered
@@ -97,7 +113,7 @@ export class MessageDebouncer {
    */
   private async firePending(
     key: string,
-    handler: (bufferedEvent: ChatEvent) => Promise<void>,
+    handler: (snapshot: DebounceSnapshot) => Promise<void>,
   ): Promise<void> {
     const pending = this.pending.get(key);
     if (!pending) {
@@ -107,11 +123,20 @@ export class MessageDebouncer {
     this.pending.delete(key);
 
     try {
+      const snapshot: DebounceSnapshot = {
+        userKey: key,
+        events: pending.events,
+        lastEvent: pending.lastEvent,
+        count: pending.events.length,
+        firstAt: pending.firstAt,
+        lastAt: pending.lastAt,
+      };
+
       this.logger.debug(
         'debouncer',
-        `Processing buffered message from ${pending.event.userId} (waited ${Date.now() - pending.lastUpdated + this.delayMs}ms)`,
+        `Processing buffered snapshot from ${pending.lastEvent.userId} (count=${snapshot.count}, waited ${Date.now() - pending.lastUpdated + this.delayMs}ms)`,
       );
-      await handler(pending.event);
+      await handler(snapshot);
     } catch (error) {
       this.logger.error(
         'debouncer',

@@ -1,6 +1,6 @@
 /**
  * @file Test debouncer functionality
- * 
+ *
  * This test demonstrates the MessageDebouncer in action
  */
 import { MessageDebouncer } from '../../src/core/conversation/MessageDebouncer.js';
@@ -19,8 +19,8 @@ async function testDebouncer() {
   const debouncer = new MessageDebouncer(logger, 2000); // 2s for testing
   const results: string[] = [];
 
-  const handler = async (bufferedEvent: any) => {
-    const msg = `Handler called for: ${bufferedEvent.rawText}`;
+  const handler = async (snapshot: any) => {
+    const msg = `Handler called for: ${snapshot.lastEvent.rawText} (count=${snapshot.count})`;
     results.push(msg);
     console.log(`✓ ${msg}`);
   };
@@ -44,7 +44,9 @@ async function testDebouncer() {
   console.log(`  Results so far: ${results.length} handler calls\n`);
 
   // Scenario 2: Multiple messages within debounce window
-  console.log('📝 Scenario 2: Multiple messages in quick succession (should only process the last one)');
+  console.log(
+    '📝 Scenario 2: Multiple messages in quick succession (should only process the last one)',
+  );
   results.length = 0;
 
   const event2a = {

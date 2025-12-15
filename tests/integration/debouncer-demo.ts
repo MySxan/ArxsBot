@@ -20,8 +20,9 @@ async function demonstrateDebouncer() {
   const processedMessages: string[] = [];
 
   // 模拟的消息处理 handler
-  const mockHandler = async (event: any) => {
-    const log = `处理消息: "${event.rawText}" (来自 ${event.userId})`;
+  const mockHandler = async (snapshot: any) => {
+    const event = snapshot.lastEvent;
+    const log = `处理消息: "${event.rawText}" (来自 ${event.userId}, count=${snapshot.count})`;
     processedMessages.push(log);
     console.log(`  ✓ ${log}`);
   };
