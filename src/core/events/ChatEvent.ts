@@ -21,6 +21,12 @@ export interface ChatEvent {
   /** Timestamp (milliseconds) */
   timestamp: number;
 
+  /**
+   * Local ingest time (milliseconds) when this process received/created the event.
+   * Useful to distinguish adapter backfill bursts from real-time flow.
+   */
+  ingestTime?: number;
+
   /** Whether this message mentions/at the bot */
   mentionsBot: boolean;
 

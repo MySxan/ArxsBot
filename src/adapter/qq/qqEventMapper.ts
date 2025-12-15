@@ -77,6 +77,7 @@ export function mapToChatEvent(
   raw: unknown,
   logger?: { debug: (tag: string, msg: string) => void },
 ): ChatEvent | null {
+  const ingestTime = Date.now();
   const parsed = OB11MessageSchema.safeParse(raw);
   if (!parsed.success) {
     return null;
@@ -124,6 +125,7 @@ export function mapToChatEvent(
     messageId: String(msg.message_id ?? 0),
     rawText,
     timestamp: msg.time * 1000,
+    ingestTime,
     mentionsBot,
     userName: msg.sender?.nickname ?? msg.sender?.card ?? `User${msg.user_id}`,
     groupName: msg.message_type === 'group' ? `Group${msg.group_id}` : undefined,

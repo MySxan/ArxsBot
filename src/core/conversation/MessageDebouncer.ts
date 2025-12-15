@@ -60,7 +60,7 @@ export class MessageDebouncer {
     const key = this.getKey(event);
     const pending = this.pending.get(key);
     const now = Date.now();
-    const eventAt = event.timestamp ?? now;
+    const ingestAt = event.ingestTime ?? now;
 
     if (pending) {
       // User already has pending message - update it and reset timer
@@ -75,7 +75,7 @@ export class MessageDebouncer {
       // Update buffer
       pending.events.push(event);
       pending.lastEvent = event;
-      pending.lastAt = eventAt;
+      pending.lastAt = ingestAt;
       pending.lastUpdated = now;
 
       // Set new timer
@@ -100,8 +100,8 @@ export class MessageDebouncer {
       events: [event],
       lastEvent: event,
       timerId,
-      firstAt: eventAt,
-      lastAt: eventAt,
+      firstAt: ingestAt,
+      lastAt: ingestAt,
       lastUpdated: now,
     });
 
@@ -132,9 +132,23 @@ export class MessageDebouncer {
         lastAt: pending.lastAt,
       };
 
+      // Lag stats (eventTime vs ingestTime)
+      let lagSum = 0;
+      let lagCount = 0;
+      let lagMax = 0;
+      for (const e of pending.events) {
+        const ingestAt = e.ingestTime ?? Date.now();
+        const eventAt = e.timestamp ?? ingestAt;
+        const lag = Math.max(0, ingestAt - eventAt);
+        lagSum += lag;
+        lagCount += 1;
+        if (lag > lagMax) lagMax = lag;
+      }
+      const lagAvg = lagCount ? Math.round(lagSum / lagCount) : 0;
+
       this.logger.debug(
         'debouncer',
-        `Processing buffered snapshot from ${pending.lastEvent.userId} (count=${snapshot.count}, waited ${Date.now() - pending.lastUpdated + this.delayMs}ms)`,
+        `DebounceFlush: userKey=${snapshot.userKey} count=${snapshot.count} firstIngestAt=${snapshot.firstAt} lastIngestAt=${snapshot.lastAt} lagMs(avg=${lagAvg}, max=${lagMax})`,
       );
       await handler(snapshot);
     } catch (error) {

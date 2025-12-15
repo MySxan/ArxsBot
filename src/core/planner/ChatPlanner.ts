@@ -41,11 +41,16 @@ export function plan(event: ChatEvent, memberStats?: MemberStatsStore): PlanResu
   const text = event.rawText.trim();
   const groupKey = `${event.platform}:${event.groupId}`;
   const memberKey = memberStats?.buildMemberKey(event.platform, event.groupId, event.userId);
-  const now = event.timestamp ?? Date.now();
+  const ingestTime = event.ingestTime ?? Date.now();
+  const eventTime = event.timestamp ?? ingestTime;
+  const now = ingestTime;
 
   // Record activity for this group (skip bot's own messages to avoid stat pollution)
   if (!event.fromBot) {
-    recordGroupMessage(groupKey, event.timestamp ?? Date.now());
+    const lagMs = ingestTime - eventTime;
+    if (lagMs <= 30_000) {
+      recordGroupMessage(groupKey, ingestTime);
+    }
   }
 
   // 1. Command mode: starts with / or ！

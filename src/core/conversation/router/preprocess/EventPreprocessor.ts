@@ -10,6 +10,8 @@ export interface PreprocessResult {
 }
 
 export class EventPreprocessor {
+  private readonly maxEventLagMs = 30_000;
+
   constructor(
     private readonly deps: {
       logger: Logger;
@@ -24,8 +26,15 @@ export class EventPreprocessor {
       `Received message from ${event.userId} in ${event.groupId}: "${event.rawText.substring(0, 30)}..."`,
     );
 
-    const timestamp = event.timestamp ?? Date.now();
+    const ingestTime = event.ingestTime ?? Date.now();
+    const eventTime = event.timestamp ?? ingestTime;
+    const timestamp = eventTime;
     const conversationKey = `${event.platform}:${event.groupId}`;
+
+    const lagMs = ingestTime - eventTime;
+    const isCommand =
+      event.rawText.trimStart().startsWith('/') || event.rawText.trimStart().startsWith('！');
+    const isStale = lagMs > this.maxEventLagMs;
 
     // 存储消息到 conversation store
     if (this.deps.conversationStore) {
@@ -49,8 +58,18 @@ export class EventPreprocessor {
         userId: event.userId,
         userName: event.userName,
         mentionsBot: event.mentionsBot,
-        isCommand: event.rawText.startsWith('/'),
+        isCommand,
       });
+    }
+
+    // If adapter backfilled old messages, don't treat them as real-time triggers.
+    // Keep them stored for context, but skip stats + reply processing unless it's a command/@.
+    if (!event.fromBot && isStale && !event.mentionsBot && !isCommand) {
+      this.deps.logger.debug(
+        'router',
+        `Skipping stale/backfill message (lag=${lagMs}ms, user=${event.userId}, group=${event.groupId})`,
+      );
+      return { timestamp, conversationKey, shouldContinue: false };
     }
 
     // 跳过 bot 消息，仅更新用户消息的统计信息
@@ -59,7 +78,7 @@ export class EventPreprocessor {
         event.platform,
         event.groupId,
         event.userId,
-        timestamp,
+        ingestTime,
         event.rawText,
         event.mentionsBot,
       );

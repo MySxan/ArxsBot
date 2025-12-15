@@ -83,6 +83,11 @@ export class ConversationRouter {
    * @returns A promise that resolves when the event is handled.
    */
   async handleEvent(event: ChatEvent): Promise<void> {
+    // Ensure local ingest time is present (adapters may backfill history quickly).
+    if (event.ingestTime === undefined) {
+      event.ingestTime = Date.now();
+    }
+
     const preprocess = this.preprocessor.run(event);
     if (!preprocess.shouldContinue) {
       return;
@@ -173,6 +178,12 @@ export class ConversationRouter {
   ): boolean {
     // If we cancelled mid-typing, prefer replying on next flush.
     if (session.forceQuoteNextFlush) {
+      this.logger.debug(
+        'router',
+        `GroupTurnTakingGuard: decision=allow reason=force-quote sinceLastGroupReplyMs=${
+          Date.now() - (session.lastBotReplyAt ?? 0)
+        } priority=3 for ${sessionKey}`,
+      );
       return true;
     }
 
@@ -181,17 +192,25 @@ export class ConversationRouter {
     const sinceLastReply = now - (session.lastBotReplyAt ?? 0);
 
     if (sinceLastReply >= cooldownMs) {
+      this.logger.debug(
+        'router',
+        `GroupTurnTakingGuard: decision=allow reason=cooldown-elapsed sinceLastGroupReplyMs=${sinceLastReply} priority=1 for ${sessionKey}`,
+      );
       return true;
     }
 
     // Cooldown window: only break for follow-up questions / clarifications.
     if (snapshot.count >= 2 && this.hasQuestion(mergedText)) {
+      this.logger.debug(
+        'router',
+        `GroupTurnTakingGuard: decision=allow reason=followup-question sinceLastGroupReplyMs=${sinceLastReply} priority=2 for ${sessionKey}`,
+      );
       return true;
     }
 
     this.logger.debug(
       'router',
-      `TurnTakingGuard: skip (sinceLastReply=${sinceLastReply}ms, count=${snapshot.count}) for ${sessionKey}`,
+      `GroupTurnTakingGuard: decision=skip reason=cooldown sinceLastGroupReplyMs=${sinceLastReply} priority=0 for ${sessionKey}`,
     );
     return false;
   }
