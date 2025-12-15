@@ -62,7 +62,9 @@ export class SendPipeline {
         ? quoteTarget.messageId
         : undefined;
 
-    const quoteTargetSeq = quoteTarget ? ((quoteTarget as any).__seq as number | undefined) : undefined;
+    const quoteTargetSeq = quoteTarget
+      ? ((quoteTarget as any).__seq as number | undefined)
+      : undefined;
     const session = this.deps.sessionStore?.get(sessionKey);
     const currentSeq = session?.messageSeq;
     const gap =

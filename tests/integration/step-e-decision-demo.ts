@@ -3,7 +3,9 @@ import type { DebounceSnapshot } from '../../src/core/conversation/MessageDeboun
 import { ConversationRouter } from '../../src/core/conversation/ConversationRouter.js';
 import { SessionStateStore } from '../../src/core/conversation/router/session/SessionStateStore.js';
 
-function makeEvent(partial: Partial<ChatEvent> & Pick<ChatEvent, 'rawText' | 'messageId'>): ChatEvent {
+function makeEvent(
+  partial: Partial<ChatEvent> & Pick<ChatEvent, 'rawText' | 'messageId'>,
+): ChatEvent {
   const now = Date.now();
   return {
     ...partial,

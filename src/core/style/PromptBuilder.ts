@@ -44,8 +44,17 @@ export class PromptBuilder {
 
   private formatTurnLine(turn: ChatTurn): string {
     const name = turn.role === 'bot' ? '你' : turn.userName || turn.userId || '某人';
-    const content = this.ensureAtYouPrefix(this.escapeNewlines(turn.content), Boolean(turn.mentionsBot));
+    const content = this.ensureAtYouPrefix(
+      this.escapeNewlines(turn.content),
+      Boolean(turn.mentionsBot),
+    );
     return `${name}: ${content}`;
+  }
+
+  private isCommandTurn(turn: ChatTurn): boolean {
+    if (turn.isCommand) return true;
+    if (turn.role !== 'user') return false;
+    return turn.content.trimStart().startsWith('/');
   }
 
   /**
@@ -129,9 +138,13 @@ export class PromptBuilder {
     currentUserName: string,
     currentUserMessage: string,
   ): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
-    const targetName = replyContext.targetTurn?.userName || currentUserName;
-    const targetMessage = replyContext.targetTurn?.content || currentUserMessage;
-    const allTurns = replyContext.recentTurns;
+    const safeTargetTurn =
+      replyContext.targetTurn && !this.isCommandTurn(replyContext.targetTurn)
+        ? replyContext.targetTurn
+        : undefined;
+    const targetName = safeTargetTurn?.userName || currentUserName;
+    const targetMessage = safeTargetTurn?.content || currentUserMessage;
+    const allTurns = replyContext.recentTurns.filter((t) => !this.isCommandTurn(t));
 
     // 最后一次 bot 回复的位置
     let lastBotIndex = -1;
@@ -156,9 +169,9 @@ export class PromptBuilder {
       const historicalStartIndex = Math.max(0, lastBotIndex - 5);
 
       // [HISTORICAL]
-      // We intentionally take the 5 turns BEFORE the last bot message (exclude bot turn itself).
+      // Include up to 5 turns before the last bot message
       contextLines.push('[HISTORICAL]');
-      for (let i = historicalStartIndex; i < lastBotIndex; i += 1) {
+      for (let i = historicalStartIndex; i <= lastBotIndex; i += 1) {
         const turn = allTurns[i];
         contextLines.push(this.formatTurnLine(turn));
       }
@@ -176,7 +189,7 @@ export class PromptBuilder {
     const contextBlock = contextLines.join('\n');
 
     // [TARGET]
-    const targetMentions = Boolean(replyContext.targetTurn?.mentionsBot);
+    const targetMentions = Boolean(safeTargetTurn?.mentionsBot);
     const safeTargetMessage = this.ensureAtYouPrefix(
       this.escapeNewlines(targetMessage),
       targetMentions,
