@@ -155,7 +155,7 @@ export class ReplyPipeline {
       dynamicStyle,
       undefined,
       event.userName || event.userId,
-      event.rawText,
+      ((event as any).__targetText as string | undefined) ?? event.rawText,
     );
 
     // 记录 prompt（用于 /prompts）

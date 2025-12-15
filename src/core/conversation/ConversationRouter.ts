@@ -111,12 +111,17 @@ export class ConversationRouter {
     const session = this.sessionStore.get(sessionKey);
 
     const mergedText = this.buildMergedText(snapshot.events, 6);
+
+    const targetEvent =
+      snapshot.count >= 3 ? this.pickQuoteTarget(snapshot.events) : snapshot.lastEvent;
     const mergedEvent: ChatEvent = { ...snapshot.lastEvent, rawText: mergedText };
     (mergedEvent as any).__debounce = {
       count: snapshot.count,
       firstAt: snapshot.firstAt,
       lastAt: snapshot.lastAt,
     };
+
+    (mergedEvent as any).__targetText = targetEvent.rawText;
 
     if (!this.shouldSpeak(sessionKey, session, snapshot, mergedText)) {
       return;
@@ -128,7 +133,7 @@ export class ConversationRouter {
       session.incomingWhileTyping >= 3; // defensive: if some other code wrote this
 
     if (shouldQuote) {
-      (mergedEvent as any).__quoteTarget = this.pickQuoteTarget(snapshot.events);
+      (mergedEvent as any).__quoteTarget = targetEvent;
       this.sessionStore.clearForceQuoteNextFlush(sessionKey);
     }
 
