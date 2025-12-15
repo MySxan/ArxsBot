@@ -31,6 +31,23 @@ export interface LongTermMemory {
 }
 
 export class PromptBuilder {
+  private escapeNewlines(text: string): string {
+    return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, '\\n');
+  }
+
+  private ensureAtYouPrefix(text: string, enabled: boolean): string {
+    if (!enabled) return text;
+    const t = text.trimStart();
+    if (t.startsWith('@你')) return text;
+    return `@你 ${text}`;
+  }
+
+  private formatTurnLine(turn: ChatTurn): string {
+    const name = turn.role === 'bot' ? '你' : turn.userName || turn.userId || '某人';
+    const content = this.ensureAtYouPrefix(this.escapeNewlines(turn.content), Boolean(turn.mentionsBot));
+    return `${name}: ${content}`;
+  }
+
   /**
    * 构建固定语言约束
    */
@@ -132,8 +149,7 @@ export class PromptBuilder {
       // 没有bot说过话，全部为 NEW_WINDOW
       contextLines.push('[NEW_WINDOW]');
       for (const turn of allTurns) {
-        const name = turn.role === 'bot' ? '你' : turn.userName || turn.userId || '某人';
-        contextLines.push(`${name}: ${turn.content}`);
+        contextLines.push(this.formatTurnLine(turn));
       }
     } else {
       // 有bot说过话，分两个区间
@@ -143,8 +159,7 @@ export class PromptBuilder {
       contextLines.push('[HISTORICAL]');
       for (let i = historicalStartIndex; i <= lastBotIndex; i += 1) {
         const turn = allTurns[i];
-        const name = turn.role === 'bot' ? '你' : turn.userName || turn.userId || '某人';
-        contextLines.push(`${name}: ${turn.content}`);
+        contextLines.push(this.formatTurnLine(turn));
       }
 
       // [NEW_WINDOW]
@@ -152,8 +167,7 @@ export class PromptBuilder {
         contextLines.push('[NEW_WINDOW]');
         for (let i = lastBotIndex + 1; i < allTurns.length; i += 1) {
           const turn = allTurns[i];
-          const name = turn.role === 'bot' ? '你' : turn.userName || turn.userId || '某人';
-          contextLines.push(`${name}: ${turn.content}`);
+          contextLines.push(this.formatTurnLine(turn));
         }
       }
     }
@@ -161,7 +175,12 @@ export class PromptBuilder {
     const contextBlock = contextLines.join('\n');
 
     // [TARGET]
-    const targetBlock = `[TARGET]\n${targetName || '对方'}: ${targetMessage}`;
+    const targetMentions = Boolean(replyContext.targetTurn?.mentionsBot);
+    const safeTargetMessage = this.ensureAtYouPrefix(
+      this.escapeNewlines(targetMessage),
+      targetMentions,
+    );
+    const targetBlock = `[TARGET]\n${targetName || '对方'}: ${safeTargetMessage}`;
 
     // 组装 user message
     const sections: string[] = [];
