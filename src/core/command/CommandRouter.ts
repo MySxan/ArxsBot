@@ -10,6 +10,30 @@ export class CommandRouter {
   private commandMap: Map<string, CommandHandler> = new Map();
   private router?: any;
 
+  isRegistered(name: string): boolean {
+    return this.commandMap.has(name.toLowerCase());
+  }
+
+  tryParse(rawText: string): { name: string; args: string[]; prefix: '/' | '!' } | null {
+    const text = rawText.trim();
+    if (!text) return null;
+
+    const first = text[0];
+    if (first !== '/' && first !== '!' && first !== '！') return null;
+
+    const prefix: '/' | '!' = first === '/' ? '/' : '!';
+
+    const body = text.slice(1).trim();
+    if (!body) return null;
+
+    const parts = body.split(/\s+/);
+    const name = parts[0].toLowerCase();
+    const args = parts.slice(1);
+
+    if (!this.isRegistered(name)) return null;
+    return { name, args, prefix };
+  }
+
   constructor(
     private sender: MessageSender,
     private logger: Logger,

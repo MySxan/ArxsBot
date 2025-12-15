@@ -102,11 +102,20 @@ export class ConversationRouter {
 
     this.typingInterruption.onIncomingUserMessage(sessionKey, event);
 
-    // 检查是否为命令或@机器人 - 这些不使用防抖，立即处理
-    const { isCommand, isMention } = this.classifier.classify(event);
+    // 入口分流：前缀只是“可能是命令”；只有命中指令表才算命令。
+    const parsedCommand = this.commandRouter?.tryParse(event.rawText);
+    const isCommand = Boolean(parsedCommand);
+    const isMention = this.classifier.isMention(event);
 
-    if (isCommand || isMention) {
-      // 命令和@消息立即处理，不使用防抖
+    if (isCommand) {
+      // Commands must be immediate and should not wait behind the per-group reply queue.
+      // Fire-and-forget: allows handling commands in parallel while a reply is being generated/sent.
+      void this.processEvent(event);
+      return;
+    }
+
+    if (isMention) {
+      // @消息立即处理，但仍保持群内串行，避免同时跑多个聊天回复管线。
       await this.sessionStore.runQueued(sessionKey, async () => {
         await this.processEvent(event);
       });
@@ -243,7 +252,8 @@ export class ConversationRouter {
         (event as any).__quoteTarget = event;
       }
 
-      const { isCommand } = this.classifier.classify(event);
+      const parsedCommand = this.commandRouter?.tryParse(event.rawText);
+      const isCommand = Boolean(parsedCommand);
       if (isCommand) {
         if (this.commandRouter) {
           await this.commandRouter.handle(event);
